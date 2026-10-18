@@ -1,0 +1,9 @@
+{
+	"extends": "../../tsconfig.json",
+	"compilerOptions": {
+		// core imports types from yena's src/api.ts
+		"rootDir": "../..",
+		"noEmit": true
+	},
+	"include": ["src"]
+}

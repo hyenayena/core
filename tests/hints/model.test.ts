@@ -1,0 +1,156 @@
+import assert from 'node:assert/strict';
+import {test} from 'node:test';
+import {acceptEdit, computeHints} from '../../src/hints/model.js';
+import {catalog} from './fixture.js';
+
+const labels = (line: string) => computeHints(catalog, line).items.map(i => i.label);
+
+test('blank lines have no stage', () => {
+	assert.equal(computeHints(catalog, '').stage, 'none');
+	assert.equal(computeHints(catalog, '   ').stage, 'none');
+});
+
+test('first token matches commands', () => {
+	const h = computeHints(catalog, 'e');
+	assert.equal(h.stage, 'command');
+	assert.equal(h.tokenStart, 0);
+	assert.equal(h.token, 'e');
+	assert.deepEqual(h.items.map(i => i.label).slice(0, 2), ['echo', 'exit']);
+	assert.ok(h.items[0]!.prefix);
+});
+
+test('leading whitespace shifts tokenStart', () => {
+	const h = computeHints(catalog, '  ex');
+	assert.equal(h.tokenStart, 2);
+	assert.equal(h.items[0]!.label, 'exit');
+});
+
+test('exact command is still listed', () => {
+	assert.equal(computeHints(catalog, 'echo').items[0]!.label, 'echo');
+});
+
+test('unknown command is flagged', () => {
+	const h = computeHints(catalog, 'zzzz');
+	assert.equal(h.stage, 'command');
+	assert.equal(h.unknown, true);
+	assert.deepEqual(h.items, []);
+});
+
+test('unknown first token followed by a space has no stage', () => {
+	assert.equal(computeHints(catalog, 'zzzz ').stage, 'none');
+	assert.equal(computeHints(catalog, 'zzzz foo').stage, 'none');
+});
+
+test('subcommand stage after a command and a space', () => {
+	const h = computeHints(catalog, 'mod ');
+	assert.equal(h.stage, 'sub');
+	assert.equal(h.token, '');
+	assert.equal(h.tokenStart, 4);
+	assert.deepEqual(labels('mod '), ['install', 'update', 'remove', 'list']);
+	assert.equal(h.items[0]!.prefix, false);
+	assert.ok(h.usage);
+});
+
+test('trailing spaces do not change the stage', () => {
+	assert.equal(computeHints(catalog, 'mod   ').stage, 'sub');
+	assert.equal(computeHints(catalog, 'mod   ').tokenStart, 6);
+});
+
+test('partial subcommand and alias matches', () => {
+	const h = computeHints(catalog, 'mod i');
+	assert.equal(h.stage, 'sub');
+	assert.equal(h.items[0]!.label, 'i');
+	assert.equal(h.items[0]!.via, 'install');
+	assert.equal(computeHints(catalog, 'mod ins').items[0]!.label, 'install');
+	assert.equal(computeHints(catalog, 'mod ins').items[0]!.via, undefined);
+});
+
+test('argument stage after a leaf subcommand', () => {
+	const h = computeHints(catalog, 'mod install ');
+	assert.equal(h.stage, 'arg');
+	assert.deepEqual(h.items, []);
+	assert.equal(h.usage!.head, 'mod install');
+	assert.deepEqual(h.usage!.tokens.map(t => t.text), ['[source]…']);
+	assert.equal(h.usage!.active, 0);
+});
+
+test('alias resolves in the path', () => {
+	const h = computeHints(catalog, 'mod rm ');
+	assert.equal(h.stage, 'arg');
+	assert.equal(h.usage!.active, 0);
+});
+
+test('nested subcommands', () => {
+	const h = computeHints(catalog, 'claude auth ');
+	assert.equal(h.stage, 'sub');
+	assert.deepEqual(h.items.map(i => i.label), ['login', 'logout']);
+});
+
+test('unmatched partial subcommand falls back to the argument stage', () => {
+	const h = computeHints(catalog, 'mod zzz');
+	assert.equal(h.stage, 'arg');
+	assert.deepEqual(h.items, []);
+});
+
+test('command without subs is in the argument stage', () => {
+	const h = computeHints(catalog, 'echo hi');
+	assert.equal(h.stage, 'arg');
+	assert.equal(h.usage!.head, 'echo');
+});
+
+test('command stage items carry their own usage', () => {
+	const h = computeHints(catalog, 'ec');
+	assert.equal(h.items[0]!.usage!.head, 'echo');
+	assert.equal(h.usage, undefined);
+});
+
+test('ranges are reported for fuzzy matches', () => {
+	const h = computeHints(catalog, 'xt');
+	assert.equal(h.items[0]!.label, 'exit');
+	assert.equal(h.items[0]!.prefix, false);
+	assert.ok(h.items[0]!.ranges.length > 0);
+});
+
+test('malformed input never throws', () => {
+	for (const bad of [undefined, null, 5, {}] as unknown[]) {
+		assert.equal(computeHints(catalog, bad as string).stage, 'none');
+	}
+	assert.doesNotThrow(() => computeHints(catalog, 'a '.repeat(5000)));
+	assert.doesNotThrow(() => computeHints(undefined as never, 'x'));
+});
+
+test('acceptEdit replaces only the token and appends one space', () => {
+	const h = computeHints(catalog, 'mod ins');
+	assert.deepEqual(acceptEdit('mod ins', h, h.items[0]!), {value: 'mod install ', cursor: 12});
+	const c = computeHints(catalog, 'ex');
+	assert.deepEqual(acceptEdit('ex', c, c.items[0]!), {value: 'exit ', cursor: 5});
+});
+
+test('acceptEdit does not add a second space', () => {
+	const h = computeHints(catalog, 'mod ins');
+	assert.deepEqual(acceptEdit('mod ins tail', h, h.items[0]!), {value: 'mod install tail', cursor: 12});
+});
+
+test('acceptEdit with an empty token inserts at the end', () => {
+	const h = computeHints(catalog, 'mod ');
+	assert.deepEqual(acceptEdit('mod ', h, h.items[0]!), {value: 'mod install ', cursor: 12});
+});
+
+test('acceptEdit clamps a bogus token start', () => {
+	const h = {...computeHints(catalog, 'ex'), tokenStart: 99};
+	assert.doesNotThrow(() => acceptEdit('ex', h, h.items[0]!));
+});
+
+test('commands without usage metadata have no usage line', () => {
+	assert.equal(computeHints(catalog, 'help ').usage, undefined);
+	assert.equal(computeHints(catalog, 'claude ').usage, undefined);
+	assert.equal(computeHints(catalog, 'cle').items[0]!.usage, undefined);
+});
+
+test('usage-only results carry a usage and no items', () => {
+	for (const line of ['claude ask ', 'claude auth login ', 'mod remove x']) {
+		const h = computeHints(catalog, line);
+		assert.equal(h.items.length, 0, line);
+		assert.ok(h.usage, line);
+	}
+});
