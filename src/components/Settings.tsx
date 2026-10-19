@@ -93,7 +93,7 @@ export default function Settings({tabs, control}: {tabs: SettingsTab[]; control:
 		}
 	}, [tab, current]);
 
-	// Saving closes the window and reports the choice in the console.
+	// Saving keeps the window open; only Esc closes it.
 	const save = (row: Option) => {
 		const option = row.setting.options[row.index];
 		if (!option || saving.current) return;
@@ -104,9 +104,8 @@ export default function Settings({tabs, control}: {tabs: SettingsTab[]; control:
 				() => {
 					saving.current = false;
 					if (!alive.current) return;
-					const print = control.print;
-					control.close();
-					print?.(`${clean(current?.title)} · ${clean(row.setting.label)}: ${clean(option.label)}`);
+					setValues(v => ({...v, [valueKey(row.setting)]: option.value}));
+					setStatus({text: `Saved · ${clean(row.setting.label)}: ${clean(option.label)}`});
 				},
 				error => {
 					saving.current = false;
@@ -117,7 +116,7 @@ export default function Settings({tabs, control}: {tabs: SettingsTab[]; control:
 
 	useInput(
 		(input, key) => {
-			if (control.host?.isHostKey(input)) return;
+			if (control.host?.isHostKey(input, key)) return;
 			if (key.escape || (key.ctrl && input === 'c')) return control.close();
 			if (key.leftArrow) {
 				if (tab > 0) setTab(tab - 1);

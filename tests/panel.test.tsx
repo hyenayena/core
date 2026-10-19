@@ -29,7 +29,7 @@ function Chat({control}: {control: MountControl}) {
 	);
 	useInput(
 		(input, key) => {
-			if (host.isHostKey(input)) return;
+			if (host.isHostKey(input, key)) return;
 			if (key.rightArrow && typed === '') return void host.move('right');
 			setTyped(t => t + input);
 		},
@@ -69,22 +69,22 @@ test('an autostarted main view takes the screen and the focus; the console is cl
 	const frame = h.lastFrame();
 	assert.match(frame, /CHAT\[\] focused w100/);
 	assert.doesNotMatch(frame, /Console/);
-	assert.match(h.allOutput(), /Ctrl\+§ opens the console/);
-	assert.match(h.allOutput(), /chat-opened/);
+	assert.match(h.allOutput(), /press Esc twice to open the console/);
+	assert.doesNotMatch(frame, /chat-opened/, 'output before the chat opened is cleared');
 	h.unmount();
 });
 
-test('§ toggles the console beside the chat and moves the focus with it', async () => {
+test('Ctrl+T toggles the console beside the chat and moves the focus with it', async () => {
 	const {h, type} = setup();
 	await h.settle(60);
-	await type('§');
+	await type('\x14');
 	let frame = h.lastFrame();
 	assert.match(frame, /Console/);
 	assert.match(frame, /CHAT\[\] idle w60/);
 	await type('abc');
 	assert.match(h.lastFrame(), /> abc/);
 	assert.match(h.lastFrame(), /CHAT\[\]/);
-	await type('§');
+	await type('\x14');
 	frame = h.lastFrame();
 	assert.doesNotMatch(frame, /Console/);
 	assert.match(frame, /CHAT\[\] focused w100/);
@@ -94,13 +94,13 @@ test('§ toggles the console beside the chat and moves the focus with it', async
 test('arrows move the input between the chat and the console', async () => {
 	const {h, type} = setup();
 	await h.settle(60);
-	await type('§');
+	await type('\x14');
 	await type(LEFT);
 	assert.match(h.lastFrame(), /CHAT\[\] focused/);
 	await type('x');
 	assert.match(h.lastFrame(), /CHAT\[x\]/);
-	await type('§');
-	await type('§');
+	await type('\x14');
+	await type('\x14');
 	await type(LEFT);
 	await type('\x15');
 	assert.match(h.lastFrame(), /focused/);
@@ -112,7 +112,7 @@ test('the empty chat moves right into the open console only', async () => {
 	await h.settle(60);
 	await type(RIGHT);
 	assert.match(h.lastFrame(), /CHAT\[\] focused/);
-	await type('§');
+	await type('\x14');
 	await type(LEFT);
 	await type(RIGHT);
 	assert.match(h.lastFrame(), /CHAT\[\] idle/);
@@ -123,7 +123,7 @@ test('console commands print into the panel, not above the chat', async () => {
 	const echo: Command = {name: 'say', description: 'say', run: (args, ctx) => ctx.print(`said:${args.join(' ')}`)};
 	const {h, type} = setup([echo]);
 	await h.settle(60);
-	await type('§');
+	await type('\x14');
 	await type('say hi');
 	await type(ENTER);
 	const frame = h.lastFrame();
@@ -135,8 +135,8 @@ test('console commands print into the panel, not above the chat', async () => {
 test('the chat keeps running while the console is open and after it closes', async () => {
 	const {h, type, control} = setup();
 	await h.settle(60);
-	await type('§');
-	await type('§');
+	await type('\x14');
+	await type('\x14');
 	assert.match(h.lastFrame(), /CHAT/);
 	control().close();
 	await h.settle(60);
@@ -147,21 +147,21 @@ test('the chat keeps running while the console is open and after it closes', asy
 test('a narrow terminal shows the console instead of the chat without unmounting it', async () => {
 	const {h, type} = setup([], {columns: 50, rows: 30});
 	await h.settle(60);
-	await type('§');
+	await type('\x14');
 	assert.doesNotMatch(h.lastFrame(), /CHAT/);
-	await type('§');
+	await type('\x14');
 	assert.match(h.lastFrame(), /CHAT\[\] focused w50/);
 	h.unmount();
 });
 
 test('panelGeometry splits wide terminals and stays inside the height', () => {
-	assert.deepEqual(panelGeometry(100, 30, false), {split: false, panelColumns: 0, mainColumns: 100, panelRows: 20});
+	assert.deepEqual(panelGeometry(100, 30, false), {split: false, panelColumns: 0, mainColumns: 100, panelRows: 30});
 	const g = panelGeometry(100, 30, true);
 	assert.equal(g.split, true);
 	assert.equal(g.panelColumns + g.mainColumns, 100);
 	assert.ok(g.mainColumns >= 30);
 	assert.equal(panelGeometry(50, 30, true).mainColumns, 0);
-	assert.ok(panelGeometry(100, 8, true).panelRows <= 5);
+	assert.equal(panelGeometry(100, 8, true).panelRows, 8);
 });
 
 function modelSetting(store: {value?: string}): Setting {
@@ -196,7 +196,7 @@ test('settings opens in the console with module tabs and saves a choice', async 
 	};
 	const {h, type} = setup([tabbed, other]);
 	await h.settle(60);
-	await type('§');
+	await type('\x14');
 	await type('settings');
 	await type(ENTER);
 	await h.settle(60);
@@ -209,12 +209,14 @@ test('settings opens in the console with module tabs and saves a choice', async 
 	await h.settle(60);
 	assert.equal(store.value, 'opus');
 	frame = h.lastFrame();
-	assert.doesNotMatch(frame, /↑↓ select/);
-	assert.match(frame, /Claude · Chat model: Opus/);
-	await type('settings');
+	assert.match(frame, /↑↓ select/);
+	assert.match(frame, /● Opus/);
+	assert.match(frame, /Saved · Chat model: Opus/);
+	await type(DOWN);
 	await type(ENTER);
 	await h.settle(60);
-	assert.match(h.lastFrame(), /● Opus/);
+	assert.equal(store.value, 'haiku');
+	assert.match(h.lastFrame(), /● Haiku/);
 	await type(RIGHT);
 	await h.settle(60);
 	assert.match(h.lastFrame(), /Other model/);
@@ -233,7 +235,7 @@ test('settings taller than the panel scroll inside it and never overlap', async 
 	const rows = 14;
 	const {h, type} = setup([tabbed], {columns: 100, rows});
 	await h.settle(60);
-	await type('§');
+	await type('\x14');
 	await type('help');
 	await type(ENTER);
 	await type('settings');
@@ -242,7 +244,7 @@ test('settings taller than the panel scroll inside it and never overlap', async 
 	const check = () => {
 		const frame = h.lastFrame();
 		const panel = frame.split('\n').filter(l => l.includes('│')).map(l => l.slice(l.indexOf('│') + 2).trimEnd());
-		assert.ok(panel.length <= rows - 3, `panel has ${panel.length} rows`);
+		assert.ok(panel.length <= rows, `panel has ${panel.length} rows`);
 		for (const line of panel) assert.doesNotMatch(line, /(Default|Opus|Haiku).*(Default|Opus|Haiku)/, line);
 		return panel.join('\n');
 	};
@@ -277,4 +279,218 @@ test('windowStart keeps the focus visible and pulls in its label when it fits', 
 	assert.equal(windowStart(30, 5, 15, 2), 13);
 	const s = windowStart(30, 6, 14, 11);
 	assert.ok(s <= 11 && 14 < s + 6);
+});
+
+test('the app fills the terminal and the transcript scrolls with PgUp/PgDn and Shift+↑/↓', async () => {
+	const say: Command = {
+		name: 'many',
+		description: 'print many lines',
+		run: (_a, ctx) => {
+			for (let i = 0; i < 60; i++) ctx.print(`line-${i}`);
+		},
+	};
+	const rows = 20;
+	const h = mountHarness(<App registry={createRegistry([say])} />, {columns: 60, rows});
+	await h.settle();
+	h.press('many');
+	await h.settle();
+	h.press(ENTER);
+	await h.settle(60);
+	let frame = h.lastFrame();
+	assert.equal(frame.split('\n').length, rows);
+	assert.match(frame, /line-59/);
+	assert.doesNotMatch(frame, /line-30\b/);
+	h.press('\x1b[5~');
+	await h.settle(60);
+	frame = h.lastFrame();
+	assert.doesNotMatch(frame, /line-59/);
+	assert.match(frame, /newer lines · PgDn or Shift\+↓/);
+	h.press('\x1b[1;2B');
+	await h.settle(60);
+	h.press('\x1b[6~');
+	await h.settle(60);
+	h.press('\x1b[6~');
+	await h.settle(60);
+	frame = h.lastFrame();
+	assert.match(frame, /line-59/);
+	assert.doesNotMatch(frame, /newer line/);
+	h.press('\x1b[1;2A');
+	await h.settle(60);
+	assert.match(h.lastFrame(), /1 newer line ·/);
+	h.unmount();
+});
+
+test('a scrolled-up transcript stays on the same lines while output arrives', async () => {
+	let ctxRef: import('../../../src/api.js').CommandContext | undefined;
+	const grab: Command = {name: 'grab', description: 'x', run: (_a, ctx) => void (ctxRef = ctx)};
+	const h = mountHarness(<App registry={createRegistry([grab])} />, {columns: 60, rows: 12});
+	await h.settle();
+	h.press('grab');
+	await h.settle();
+	h.press(ENTER);
+	await h.settle();
+	for (let i = 0; i < 30; i++) ctxRef!.print(`old-${i}`);
+	await h.settle(60);
+	h.press('\x1b[5~');
+	await h.settle(60);
+	const before = h.lastFrame().match(/old-\d+/g)!.join(',');
+	ctxRef!.print('fresh');
+	await h.settle(60);
+	assert.equal(h.lastFrame().match(/old-\d+/g)!.join(','), before);
+	assert.doesNotMatch(h.lastFrame(), /fresh/);
+	h.unmount();
+});
+
+test('§ and Ctrl+T toggle the console; Esc, t and \\ do not', async () => {
+	const {h, type} = setup();
+	await h.settle(60);
+	for (const key of [ESC, 't', '\\', '\x1b[27;5u']) {
+		await type(key);
+		await h.settle(40);
+		assert.doesNotMatch(h.lastFrame(), /Console/);
+	}
+	await type('\x14');
+	assert.match(h.lastFrame(), /Console · Esc Esc close/);
+	await type('\x14');
+	assert.doesNotMatch(h.lastFrame(), /Console/);
+	h.unmount();
+});
+
+test('§ (sent for ⌘+§ and Ctrl+§) toggles the console and is never typed', async () => {
+	const {h, type} = setup();
+	await h.settle(60);
+	await type('§');
+	assert.match(h.lastFrame(), /Console · Esc Esc close/);
+	assert.doesNotMatch(h.lastFrame(), /> .*§/);
+	await type('§');
+	assert.doesNotMatch(h.lastFrame(), /Console/);
+	h.unmount();
+});
+
+test('Esc twice on an empty console line closes it; once, or with text, does not', async () => {
+	const {h, type} = setup();
+	await h.settle(60);
+	await type('§');
+	assert.match(h.lastFrame(), /Console/);
+	await type(ESC);
+	await h.settle(600);
+	await type(ESC);
+	await h.settle(60);
+	assert.match(h.lastFrame(), /Console/, 'two slow presses do not close it');
+	await type('abc');
+	await type(ESC);
+	await h.settle(40);
+	await type(ESC);
+	await h.settle(60);
+	assert.match(h.lastFrame(), /Console/, 'not with text on the line');
+	await type('\x15');
+	await type(ESC);
+	await h.settle(40);
+	await type(ESC);
+	await h.settle(60);
+	assert.doesNotMatch(h.lastFrame(), /Console/);
+	assert.match(h.lastFrame(), /CHAT\[\] focused/);
+	h.unmount();
+});
+
+test('a main view opens the console through host.togglePanel', async () => {
+	const {h, control} = setup();
+	await h.settle(60);
+	assert.equal(control().host!.togglePanel!(), true);
+	await h.settle(60);
+	assert.match(h.lastFrame(), /Console/);
+	assert.match(h.lastFrame(), /CHAT\[\] idle/);
+	h.unmount();
+});
+
+test('createDoubleEsc fires only on the second press inside the window', async () => {
+	const {createDoubleEsc} = await import('../src/view/keys.js');
+	let t = 1000;
+	const d = createDoubleEsc(500, () => t);
+	assert.equal(d.press(), false);
+	t += 400;
+	assert.equal(d.press(), true);
+	assert.equal(d.press(), false);
+	t += 600;
+	assert.equal(d.press(), false);
+	d.reset();
+	t += 100;
+	assert.equal(d.press(), false);
+});
+
+test('a main view can show a title bar above the transcript; it goes when the view closes', async () => {
+	const {h, control} = setup();
+	await h.settle(60);
+	control().host!.setTitle!('Build fix', 'API key · opus · idle');
+	await h.settle(60);
+	const lines = h.lastFrame().split('\n');
+	assert.match(lines[0]!, /^ Build fix +API key · opus · idle\s*$/);
+	control().host!.setTitle!(`Evil\u001b]0;x\u0007 name`, 'd');
+	await h.settle(60);
+	assert.doesNotMatch(h.lastFrame(), /\u001b\]0;/);
+	control().close();
+	await h.settle(60);
+	assert.doesNotMatch(h.lastFrame(), /Evil/);
+	h.unmount();
+});
+
+test('titleBarText keeps the detail on the right and shortens the title first', async () => {
+	const {titleBarText} = await import('../src/components/TitleBar.js');
+	const a = titleBarText('Chat', 'opus · idle', 30);
+	assert.ok(a.left.startsWith(' Chat '));
+	assert.equal(a.right, ' opus · idle ');
+	assert.equal((a.left + a.right).length, 30);
+	const b = titleBarText('A very long chat title indeed', 'opus · idle', 24);
+	assert.equal([...(b.left + b.right)].length, 24);
+	assert.match(b.left, /…/);
+	assert.match(b.right, /opus · idle/);
+});
+
+test('the title bar is olive, and inverse with NO_COLOR', async () => {
+	const {titleBarStyle} = await import('../src/components/TitleBar.js');
+	assert.deepEqual(titleBarStyle({}), {backgroundColor: '#808000', color: '#000000'});
+	assert.deepEqual(titleBarStyle({NO_COLOR: '1'}), {inverse: true});
+});
+
+test(':q in the side console closes the console and keeps the chat', async () => {
+	const {h, type} = setup();
+	await h.settle(60);
+	await type('§');
+	await type(':q');
+	await type(ENTER);
+	await h.settle(60);
+	assert.doesNotMatch(h.lastFrame(), /Console/);
+	assert.match(h.lastFrame(), /CHAT\[\] focused/);
+	h.unmount();
+});
+
+test(':q in a full-screen console and host.quit from a view exit the app', async () => {
+	const h = mountHarness(<App registry={createRegistry([])} />);
+	await h.settle();
+	h.press(':q');
+	await h.settle();
+	h.press(ENTER);
+	await h.waitUntilExit();
+	const {h: h2, control} = setup();
+	await h2.settle(60);
+	control().host!.quit!();
+	await h2.waitUntilExit();
+});
+
+test('a new main view starts on a clean transcript, keeping the welcome line', async () => {
+	const {h, control} = setup();
+	await h.settle(60);
+	control().print!('old message');
+	await h.settle(60);
+	assert.match(h.lastFrame(), /old message/);
+	control().close();
+	await h.settle(60);
+	h.press('chat');
+	await h.settle();
+	h.press(ENTER);
+	await h.settle(80);
+	assert.doesNotMatch(h.lastFrame(), /old message/);
+	assert.match(h.lastFrame(), /press Esc twice/);
+	assert.match(h.lastFrame(), /CHAT\[\]/);
+	h.unmount();
 });

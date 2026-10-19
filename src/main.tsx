@@ -7,7 +7,11 @@ import {APP_TITLE, setTerminalTitle} from './view/title.js';
 
 const main: ModuleMain = yena => {
 	setTerminalTitle(process.stdout, APP_TITLE);
-	render(<App registry={createRegistry(yena.commands)} log={yena.log} />, {exitOnCtrlC: false});
+	render(<App registry={createRegistry(yena.commands)} log={yena.log} />, {
+		exitOnCtrlC: false,
+		// Full screen: the app keeps and scrolls its own transcript; the terminal's screen is restored on exit.
+		alternateScreen: true,
+	});
 };
 
 export default main;

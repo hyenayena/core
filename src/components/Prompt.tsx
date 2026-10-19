@@ -16,6 +16,7 @@ import {windowLine} from '../hints/viewport.js';
 import {c} from '../hints/style.js';
 import {graphemes} from '../hints/width.js';
 import Hints from './Hints.js';
+import {createDoubleEsc} from '../view/keys.js';
 
 type Props = {
 	prompt?: string;
@@ -29,7 +30,9 @@ type Props = {
 	active?: boolean;
 	// Left arrow on an empty line (moves focus to the neighbouring area).
 	onLeftEdge?: () => void;
-	isHostKey?: (input: string) => boolean;
+	// Esc twice on an empty line (closes the side console).
+	onDoubleEscape?: () => void;
+	isHostKey?: (input: string, key: Key) => boolean;
 };
 
 function toKeyInput(input: string, key: Key): KeyInput {
@@ -73,6 +76,7 @@ export default function Prompt({
 	onInterrupt,
 	active = true,
 	onLeftEdge,
+	onDoubleEscape,
 	isHostKey,
 	...size
 }: Props) {
@@ -80,6 +84,7 @@ export default function Prompt({
 	// in a ref and the state copy only drives rendering.
 	const stateRef = useRef<PromptState>(initialState);
 	const [state, setState] = useState<PromptState>(initialState);
+	const doubleEsc = useRef(createDoubleEsc());
 	const historyRef = useRef(history);
 	historyRef.current = history;
 	const terminal = useWindowSize();
@@ -106,8 +111,15 @@ export default function Prompt({
 
 	useInput(
 		(input, key) => {
-			if (isHostKey?.(input)) return;
+			if (isHostKey?.(input, key)) return;
+			// Page keys and Shift+↑/↓ scroll the transcript; the app handles them.
+			if (key.pageUp || key.pageDown || (key.shift && (key.upArrow || key.downArrow))) return;
 			if (key.leftArrow && onLeftEdge && stateRef.current.value === '') return onLeftEdge();
+			if (key.escape && onDoubleEscape && stateRef.current.value === '') {
+				if (doubleEsc.current.press()) return onDoubleEscape();
+			} else {
+				doubleEsc.current.reset();
+			}
 			apply(toKeyInput(input, key));
 		},
 		{isActive: active},

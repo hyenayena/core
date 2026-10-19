@@ -3,6 +3,8 @@ import type {ReactElement} from 'react';
 import {render} from 'ink';
 import type {Logger} from '../../../src/api.js';
 
+const CONTROL_ONLY = new RegExp(String.fromCharCode(27) + '\\[[0-9;?]*[A-Za-z]', 'g');
+
 export const wait = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
 
 export function mountHarness(
@@ -39,7 +41,8 @@ export function mountHarness(
 		press: (sequence: string) => stdin.write(sequence),
 		// Escape is flushed by Ink after 20 ms, so waits must exceed that
 		settle: (ms = 30) => wait(ms),
-		lastFrame: () => chunks.at(-1) ?? '',
+		// Mode switches (bracketed paste, cursor) arrive as chunks of their own; skip them.
+		lastFrame: () => [...chunks].reverse().find(c => c.replace(CONTROL_ONLY, '') !== '') ?? '',
 		allOutput: () => chunks.join(''),
 		frameCount: () => chunks.length,
 		resize: (columns: number, rows: number) => {

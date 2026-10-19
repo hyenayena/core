@@ -4,26 +4,31 @@ Command REPL for yena (Ink). Commands receive a `CommandContext` (see `src/api.t
 
 ## Screen layout: main view and console
 
+- The app is full screen: `main.tsx` renders in the alternate screen (the terminal's own screen and scrollback come back on exit). There is no `<Static>`: `App` keeps the printed lines itself (last 5000) and draws them as a transcript above the main view (or the console prompt), clipped at the top. PageUp/PageDown scroll it by a page, Shift+↑/↓ by a line, unless the side console has the input; while scrolled up a `↓ N newer lines · PgDn or Shift+↓` row shows and new output keeps the view on the same lines. The side panel is the full terminal height.
 - At startup `main.tsx` sets the terminal window/tab title to `yena` (OSC 0, only when stdout is a TTY; `src/view/title.ts`).
 - The console is the command prompt (with hints, below). With no main view it owns the whole screen, as a plain REPL.
-- A main view (e.g. the claude chat) is mounted with `ctx.mount(build)` (target `main`, the default). It then owns the screen and the input, and the console becomes a side panel on the right: Ctrl+§ opens and closes it (terminals send a plain `§`, which therefore cannot be typed). Opening focuses the console, closing focuses the main view.
+- A main view (e.g. the claude chat) is mounted with `ctx.mount(build)` (target `main`, the default). It then owns the screen and the input, and the console becomes a side panel on the right: Esc twice (within 500 ms) opens and closes it: in the chat on an idle, empty draft (the view calls `host.togglePanel()`), in the console on an empty line. Every terminal sends Esc, unlike ⌘/Ctrl combinations (PhpStorm keeps ⌘ for itself and reserves Ctrl+T). `§` (what Ctrl+§ sends in most terminals, so it cannot be typed) and Ctrl+T still toggle where they arrive. Opening focuses the console, closing focuses the main view.
 - With the panel open, ← on an empty console line moves the input to the main view; a main view moves it back with `control.host.move('right')` (the claude chat does it on → with an empty draft). Both stay mounted; only the focused one reads keys.
 - The panel takes 40% of the width (at least 28 columns, leaving at least 30), at most 20 rows (rows - 3). Below 60 columns the open console covers the main view instead (it stays mounted, hidden).
 - Console commands print into the panel (last 500 lines kept, the visible tail shown) while a main view is shown, into the scrollback otherwise. A command that mounted the main view prints into the scrollback from then on.
-- Commands with `autostart: true` run once at startup with no arguments (their output goes to the scrollback); the welcome line then mentions Ctrl+§.
-- `settings` opens a settings screen in the console: one tab per command that declares `settings` (`SettingsTab {title, settings: Setting[]}`, choice settings with `get`/`set`; malformed entries are dropped, text is sanitised). ↑↓ select, Enter saves the choice, closes the screen and prints `<tab> · <setting>: <option>` in the console; ←→ switch tabs (← on the first tab moves to the main view), Esc or Ctrl+C closes without saving. The screen gets the whole panel (`host.rows()`) and scrolls to keep the selection (and its label) visible; the hint row shows `· <shown>/<total>` when it scrolls.
+- Vim-style `:q` (or `:q!`) as a whole console line closes the side console; when the console is the whole screen it exits the app. A main view can exit the app with `host.quit()` (the claude chat does it on `:q`).
+- Mounting a main view clears the transcript (except the welcome line), so a new chat does not show the previous one; a view that resumes a conversation prints its history itself.
+- A main view may call `host.setTitle(title, detail?)`: a one-row olive bar (#808000, black text; inverse with `NO_COLOR`) above the transcript shows the title on the left (bold, shortened first) and the detail right-aligned (`components/TitleBar.tsx`); both are sanitised; it disappears when the view closes or the title is undefined.
+- The hint catalog is rebuilt when the console opens and after every command finishes, so a plugin may change its `subcommands` at runtime (the claude module lists Claude Code commands this way).
+- Commands with `autostart: true` run once at startup with no arguments (their output goes to the scrollback); the welcome line then mentions Esc Esc.
+- `settings` opens a settings screen in the console: one tab per command that declares `settings` (`SettingsTab {title, settings: Setting[]}`, choice settings with `get`/`set`; malformed entries are dropped, text is sanitised). ↑↓ select, Enter saves the choice and keeps the screen open (`Saved · <setting>: <option>`); ←→ switch tabs (← on the first tab moves to the main view); only Esc or Ctrl+C closes it. The screen gets the whole panel (`host.rows()`) and scrolls to keep the selection (and its label) visible; the hint row shows `· <shown>/<total>` when it scrolls.
 
 ## `ctx.mount(build, options?)`
 
 Shows an Ink view in `options.target`: `main` (default) or `panel` (in place of the console prompt).
 
 - `build(control)` runs once, synchronously; the returned element is shown in that area.
-- `control.print` prints into that area's output (scrollback for `main`); `control.host` (`ViewHost`) gives `isFocused()`, `columns()`, `rows()` (the panel height less its title, or the terminal height), `subscribe(listener)`, `move(direction)` and `isHostKey(input)`. A view must read input only while focused (`useInput(..., {isActive})`), lay out in `columns()` and ignore host keys.
+- `control.print` prints into that area's output (scrollback for `main`); `control.host` (`ViewHost`) gives `isFocused()`, `columns()`, `rows()` (the panel height less its title, or the terminal height), `subscribe(listener)`, `move(direction)`, `togglePanel()`, `setTitle(title, detail?)` and `isHostKey(input, key)`. A view must read input only while focused (`useInput(..., {isActive})`), lay out in `columns()` and ignore host keys.
 - The returned promise resolves when `control.close()` is called (idempotent) or the app unmounts.
 - It rejects if that area already shows a view (`A view is already mounted`), `build` throws, or the element throws while rendering.
 - With no main view, a `main` mount replaces the console until it is closed.
 - The view is wrapped in `MountBoundary` (error boundary): a render error rejects the `mount` promise and restores the prompt.
-- Only one `<Static>` is honoured by Ink and `App` owns it: a view flushes completed output through `ctx.print` and must not render its own `<Static>`. `print` never trims the retained lines.
+- A view flushes completed output through `control.print` / `ctx.print` into the transcript and must not render its own `<Static>`.
 - `main.tsx` renders with `exitOnCtrlC: false`: at the prompt Ctrl+C exits; inside a view the view receives it. A view that ignores Ctrl+C cannot be interrupted (raw mode); `MountBoundary` only catches render errors.
 - Every `.tsx` file imports React explicitly: the host runs tsx from its own root, where the module's JSX settings do not apply.
 
@@ -70,7 +75,7 @@ Manual TTY check:
 10. Type CJK/emoji and move the cursor with Left/Right.
 11. `NO_COLOR=1`: the highlight stays readable (underline, marker).
 12. Ctrl+C at the prompt exits; inside `claude chat` the prompt and hints are hidden.
-13. With the claude module and a credential: the chat opens at startup. Ctrl+§ opens the console on the right, ← moves to the chat, → (empty draft) back, Ctrl+§ closes it. `settings` shows the Claude tab; pick a model, Esc, then `chat` opens a new chat with it (status bar shows the model). Below 60 columns the console covers the chat.
+13. With the claude module and a credential: the chat opens at startup. Esc Esc opens the console on the right, ← moves to the chat, → (empty draft) back, Esc Esc on an empty console line closes it. PageUp/Shift+↑ scroll the chat transcript. `settings` shows the Claude tab; pick a model, Esc, then `chat` opens a new chat with it (status bar shows the model). Below 60 columns the console covers the chat.
 
 ## Tests
 

@@ -1,7 +1,9 @@
 import React, {useEffect, useMemo, useRef, useState, type ReactNode} from 'react';
-import {Box, Static, Text, useApp, useInput, useWindowSize} from 'ink';
+import {Box, Text, useApp, useInput, useWindowSize} from 'ink';
 import Prompt from './components/Prompt.js';
 import MountBoundary from './components/MountBoundary.js';
+import TitleBar from './components/TitleBar.js';
+import Transcript from './components/Transcript.js';
 import type {
 	Command,
 	CommandContext,
@@ -18,9 +20,9 @@ import {buildCatalog} from './hints/catalog.js';
 import {sanitizeText} from './hints/sanitize.js';
 import {unknownCommandLines} from './hints/typo.js';
 import {c} from './hints/style.js';
-import {isConsoleToggle} from './view/keys.js';
+import {isConsoleToggle, isQuitLine} from './view/keys.js';
 
-type Line = {id: number; text: string; color?: string};
+type Line = {id: number; text: string; color?: string; welcome?: boolean};
 
 type Pending = {id: number; resolve: () => void; reject: (error: Error) => void};
 
@@ -31,13 +33,15 @@ type Focus = 'main' | 'panel';
 const MAX_ERROR_LINES = 20;
 const MAX_ERROR_LINE = 4096;
 const MAX_PANEL_LINES = 500;
+// The full-screen app keeps its own scrollback; the oldest lines go past this.
+export const MAX_LINES = 5000;
+const TITLE_MAX = 200;
 // Below this width the open console covers the chat instead of sitting beside it
 const SPLIT_MIN_COLUMNS = 60;
-const PANEL_MAX_ROWS = 20;
 
 export const WELCOME = 'yena — type "help" for the list of commands';
-export const WELCOME_WITH_VIEW = 'yena — Ctrl+§ opens the console; type "help" there for the list of commands';
-export const PANEL_TITLE = 'Console · Ctrl+§ close · ← chat';
+export const WELCOME_WITH_VIEW = 'yena — press Esc twice to open the console; type "help" there for the list of commands';
+export const PANEL_TITLE = 'Console · Esc Esc close · ← chat';
 
 function errorLines(error: unknown): string[] {
 	let message: string;
@@ -59,7 +63,7 @@ export type PanelGeometry = {split: boolean; panelColumns: number; mainColumns: 
 
 /** Sizes of the chat and console areas while a main view is shown. */
 export function panelGeometry(columns: number, rows: number, open: boolean): PanelGeometry {
-	const panelRows = Math.max(3, Math.min(PANEL_MAX_ROWS, rows - 3));
+	const panelRows = Math.max(3, rows);
 	if (!open) return {split: false, panelColumns: 0, mainColumns: columns, panelRows};
 	if (columns < SPLIT_MIN_COLUMNS) return {split: false, panelColumns: columns, mainColumns: 0, panelRows};
 	const panelColumns = Math.min(columns - 30, Math.max(28, Math.round(columns * 0.4)));
@@ -86,13 +90,18 @@ export default function App({registry, log = noopLog}: {registry: Registry; log?
 			id: nextId++,
 			text: autostartCommands(registry.commands).length > 0 ? WELCOME_WITH_VIEW : WELCOME,
 			color: c('green'),
+			welcome: true,
 		},
 	]);
 	const [panelLines, setPanelLines] = useState<Line[]>([]);
-	const catalog = useMemo(() => buildCatalog(registry.commands), [registry]);
+	// Rebuilt when the console opens and after each command: plugins may add subcommands at runtime.
+	const [catalogTick, setCatalogTick] = useState(0);
+	const refreshCatalog = () => setCatalogTick(n => n + 1);
+	const catalog = useMemo(() => buildCatalog(registry.commands), [registry, catalogTick]);
 	const [history, setHistory] = useState<string[]>([]);
 
 	const [main, setMain] = useState<Mounted | null>(null);
+	const [mainTitle, setMainTitle] = useState<{title: string; detail: string} | undefined>(undefined);
 	const [panelView, setPanelView] = useState<Mounted | null>(null);
 	const [panelOpen, setPanelOpen] = useState(false);
 	const [focus, setFocus] = useState<Focus>('main');
@@ -104,6 +113,9 @@ export default function App({registry, log = noopLog}: {registry: Registry; log?
 	const consoleShown = !side || panelOpen;
 	const active: Focus = !side ? 'panel' : !panelOpen ? 'main' : focus;
 	const panelInner = side ? Math.max(1, geo.panelColumns - 2) : columns;
+	useEffect(() => {
+		if (active === 'panel') refreshCatalog();
+	}, [active]);
 
 	// Hosts are created once per view, so they read the latest layout through this ref.
 	// Without a chat the console view has the screen, less one row so Ink never clears it.
@@ -122,7 +134,17 @@ export default function App({registry, log = noopLog}: {registry: Registry; log?
 		}
 	}, [active, geo.mainColumns, panelInner, panelOpen, side, rows, panelViewRows]);
 
-	const makeHost = (target: MountTarget): ViewHost => ({
+	const togglePanel = (): boolean => {
+		const l = live.current;
+		if (!l.side) return false;
+		const open = !l.panelOpen;
+		if (open) refreshCatalog();
+		setPanelOpen(open);
+		setFocus(open ? 'panel' : 'main');
+		return true;
+	};
+
+	const makeHost = (target: MountTarget, mountId: number): ViewHost => ({
 		isFocused: () => live.current.active === target,
 		columns: () => (target === 'main' ? live.current.mainColumns : live.current.panelInner),
 		rows: () => (target === 'main' ? live.current.rows : live.current.panelViewRows),
@@ -141,6 +163,16 @@ export default function App({registry, log = noopLog}: {registry: Registry; log?
 			return true;
 		},
 		isHostKey: isConsoleToggle,
+		togglePanel,
+		quit: () => exit(),
+		setTitle: (title, detail) => {
+			if (target !== 'main' || pending.current.main?.id !== mountId) return;
+			const clean = typeof title === 'string' ? sanitizeText(title, TITLE_MAX) : '';
+			const extra = typeof detail === 'string' ? sanitizeText(detail, TITLE_MAX) : '';
+			setMainTitle(prev =>
+				clean === '' ? undefined : prev?.title === clean && prev.detail === extra ? prev : {title: clean, detail: extra},
+			);
+		},
 	});
 
 	const settle = (target: MountTarget, id: number, error?: Error) => {
@@ -149,6 +181,7 @@ export default function App({registry, log = noopLog}: {registry: Registry; log?
 		pending.current[target] = null;
 		if (target === 'main') {
 			setMain(null);
+			setMainTitle(undefined);
 			setFocus('panel');
 		} else {
 			setPanelView(null);
@@ -173,8 +206,18 @@ export default function App({registry, log = noopLog}: {registry: Registry; log?
 		[],
 	);
 
-	const printMain = (text: string, color?: string) =>
-		setLines(prev => [...prev, {id: nextId++, text, color}]);
+	const [scroll, setScroll] = useState(0);
+	const scrollRef = useRef(0);
+	scrollRef.current = scroll;
+	const linesRef = useRef(lines);
+	linesRef.current = lines;
+	const printMain = (text: string, color?: string) => {
+		setLines(prev => [...prev, {id: nextId++, text, color}].slice(-MAX_LINES));
+		// Keep a scrolled-up view on the same lines while new output arrives below.
+		if (scrollRef.current > 0) setScroll(s => Math.min(s + 1, MAX_LINES - 1));
+	};
+	const scrollBy = (delta: number) =>
+		setScroll(s => Math.max(0, Math.min(Math.max(0, linesRef.current.length - 1), s + delta)));
 	const printPanel = (text: string, color?: string) =>
 		setPanelLines(prev => [...prev, {id: nextId++, text, color}].slice(-MAX_PANEL_LINES));
 	const sideRef = useRef(side);
@@ -195,7 +238,7 @@ export default function App({registry, log = noopLog}: {registry: Registry; log?
 				const control: MountControl = {
 					close: () => settle(target, id),
 					print: target === 'main' ? text => printMain(text) : fallbackPrint,
-					host: makeHost(target),
+					host: makeHost(target, id),
 				};
 				let element: UiElement;
 				try {
@@ -208,6 +251,9 @@ export default function App({registry, log = noopLog}: {registry: Registry; log?
 				log.debug('view mounted', {id});
 				if (target === 'main') {
 					onMain();
+					// A new main view (a new chat) starts on a clean transcript; the welcome hint stays.
+					setLines(prev => prev.filter(l => l.welcome));
+					setScroll(0);
 					setMain({id, element});
 					setFocus('main');
 				} else {
@@ -222,11 +268,10 @@ export default function App({registry, log = noopLog}: {registry: Registry; log?
 		const out = (text: string, color?: string) => (ownsMain ? printMain : print)(text, color);
 		return {
 			print: text => out(text),
-			// Clear the real terminal too, since <Static> output stays on screen
 			clear: () => {
-				process.stdout.write('\x1b[2J\x1b[3J\x1b[H');
 				setLines([]);
 				setPanelLines([]);
+				setScroll(0);
 			},
 			exit,
 			mount: mount(
@@ -244,6 +289,8 @@ export default function App({registry, log = noopLog}: {registry: Registry; log?
 		} catch (error) {
 			log.warn('command failed', {command: name, err: error});
 			errorLines(error).forEach((text, i) => print(i === 0 ? `Error: ${text}` : `  ${text}`, c('red')));
+		} finally {
+			refreshCatalog();
 		}
 	};
 
@@ -259,6 +306,12 @@ export default function App({registry, log = noopLog}: {registry: Registry; log?
 
 	const handleSubmit = async (raw: string) => {
 		const line = raw.trim();
+		if (isQuitLine(line)) {
+			// Next to a view ":q" closes the console; a console that is the whole screen exits.
+			if (side && panelOpen) togglePanel();
+			else exit();
+			return;
+		}
 		printConsole(`> ${sanitizeText(raw, 4096)}`, c('gray'));
 		if (!line) return;
 
@@ -274,11 +327,18 @@ export default function App({registry, log = noopLog}: {registry: Registry; log?
 		await runCommand(command, name!, args, printConsole);
 	};
 
-	useInput(input => {
-		if (!isConsoleToggle(input) || !side) return;
-		const open = !panelOpen;
-		setPanelOpen(open);
-		setFocus(open ? 'panel' : 'main');
+	useInput((input, key) => {
+		if (!isConsoleToggle(input, key)) {
+			// The transcript scrolls unless the side console has the input.
+			if (side && active === 'panel') return;
+			const page = Math.max(1, rows - 6);
+			if (key.pageUp) scrollBy(page);
+			else if (key.pageDown) scrollBy(-page);
+			else if (key.shift && key.upArrow) scrollBy(1);
+			else if (key.shift && key.downArrow) scrollBy(-1);
+			return;
+		}
+		togglePanel();
 	});
 
 	const consoleBody = (inner: number, height?: number) =>
@@ -297,6 +357,7 @@ export default function App({registry, log = noopLog}: {registry: Registry; log?
 				active={active === 'panel'}
 				isHostKey={isConsoleToggle}
 				{...(side && geo.split && {onLeftEdge: () => setFocus('main')})}
+				{...(side && {onDoubleEscape: () => void togglePanel()})}
 			/>
 		);
 
@@ -317,7 +378,7 @@ export default function App({registry, log = noopLog}: {registry: Registry; log?
 			>
 				<Box flexShrink={0}>
 					<Text dimColor wrap="truncate-end">
-						{geo.split ? PANEL_TITLE : 'Console · Ctrl+§ close'}
+						{geo.split ? PANEL_TITLE : 'Console · Esc Esc close'}
 					</Text>
 				</Box>
 				{/* A console view gets the whole panel; the output only fills what the prompt leaves */}
@@ -339,33 +400,38 @@ export default function App({registry, log = noopLog}: {registry: Registry; log?
 		);
 	};
 
+	const transcript = <Transcript lines={lines} scroll={scroll} maxRows={rows} />;
+
 	return (
-		<Box flexDirection="column">
-			<Static items={lines}>
-				{line => (
-					<Text key={line.id} color={line.color}>
-						{line.text}
-					</Text>
-				)}
-			</Static>
+		<Box flexDirection="column" width={columns} height={rows}>
 			{main ? (
-				<Box flexDirection="row">
+				<Box flexDirection="row" flexGrow={1}>
 					{/* Kept mounted while covered, so the view and its session survive */}
 					<Box
 						flexDirection="column"
-						justifyContent="flex-end"
 						width={geo.mainColumns > 0 ? geo.mainColumns : undefined}
 						display={geo.mainColumns > 0 ? 'flex' : 'none'}
 					>
-						<MountBoundary key={main.id} onError={error => settle('main', main.id, error)}>
-							{/* UiElement is opaque in the host contract; it is a React element here */}
-							{main.element as ReactNode}
-						</MountBoundary>
+						{mainTitle !== undefined && <TitleBar {...mainTitle} columns={geo.mainColumns} />}
+						{transcript}
+						<Box flexDirection="column" flexShrink={0}>
+							<MountBoundary key={main.id} onError={error => settle('main', main.id, error)}>
+								{/* UiElement is opaque in the host contract; it is a React element here */}
+								{main.element as ReactNode}
+							</MountBoundary>
+						</Box>
 					</Box>
 					{panelOpen && panel()}
 				</Box>
 			) : (
-				consoleShown && consoleBody(columns)
+				<Box flexDirection="column" flexGrow={1}>
+					{transcript}
+					{consoleShown && (
+						<Box flexDirection="column" flexShrink={0}>
+							{consoleBody(columns)}
+						</Box>
+					)}
+				</Box>
 			)}
 		</Box>
 	);
