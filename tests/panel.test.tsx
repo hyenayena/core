@@ -58,7 +58,7 @@ function setup(extra: Command[] = [], size = {columns: 100, rows: 30}) {
 	const h = mountHarness(<App registry={createRegistry(commands)} />, size);
 	const type = async (text: string) => {
 		h.press(text);
-		await h.settle();
+		await h.settle(80);
 	};
 	return {h, type, control: () => control!};
 }
@@ -264,7 +264,8 @@ test('settings without a chat runs full width and malformed tabs are dropped', a
 	await h.settle();
 	h.press(ENTER);
 	await h.settle(60);
-	assert.match(h.lastFrame(), /No module provides settings/);
+	assert.match(h.lastFrame(), /Settings  Appearance/);
+	assert.doesNotMatch(h.lastFrame(), /Bad/);
 	h.press(ESC);
 	await h.settle(60);
 	assert.match(h.lastFrame(), /^>\s*$/m);
@@ -446,10 +447,32 @@ test('titleBarText keeps the detail on the right and shortens the title first', 
 	assert.match(b.right, /opus · idle/);
 });
 
-test('the title bar is olive, and inverse with NO_COLOR', async () => {
+test('the title bar is olive by default, follows the Appearance colour, and is inverse without colours', async () => {
 	const {titleBarStyle} = await import('../src/components/TitleBar.js');
 	assert.deepEqual(titleBarStyle({}), {backgroundColor: '#808000', color: '#000000'});
+	assert.deepEqual(titleBarStyle({}, 'blue'), {backgroundColor: '#1f4e8c', color: '#ffffff'});
+	assert.deepEqual(titleBarStyle({}, 'inverse'), {inverse: true});
 	assert.deepEqual(titleBarStyle({NO_COLOR: '1'}), {inverse: true});
+});
+
+test('appearance prefs load, save and notify; broken files give the defaults', async () => {
+	const {mkdtempSync, readFileSync, writeFileSync} = await import('node:fs');
+	const {tmpdir} = await import('node:os');
+	const {join} = await import('node:path');
+	const {loadPrefs, getPrefs, setPrefs, subscribePrefs, DEFAULT_PREFS} = await import('../src/view/prefs.js');
+	const {colorEnabled} = await import('../src/hints/style.js');
+	const dir = mkdtempSync(join(tmpdir(), 'core-prefs-'));
+	assert.deepEqual(loadPrefs(dir), DEFAULT_PREFS);
+	let calls = 0;
+	const off = subscribePrefs(() => calls++);
+	setPrefs({titleBar: 'teal', colors: false});
+	assert.equal(calls, 1);
+	assert.deepEqual(JSON.parse(readFileSync(join(dir, 'appearance.json'), 'utf8')), {titleBar: 'teal', colors: false});
+	assert.equal(colorEnabled({}), false);
+	writeFileSync(join(dir, 'appearance.json'), '{"titleBar":"pink","colors":"x"}');
+	assert.deepEqual(loadPrefs(dir), DEFAULT_PREFS);
+	assert.equal(getPrefs().colors, true);
+	off();
 });
 
 test(':q in the side console closes the console and keeps the chat', async () => {

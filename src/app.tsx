@@ -1,5 +1,5 @@
 import React, {useEffect, useMemo, useRef, useState, type ReactNode} from 'react';
-import {Box, Text, useApp, useInput, useWindowSize} from 'ink';
+import {Box, Text, useApp, useInput, useStdin, useStdout, useWindowSize} from 'ink';
 import Prompt from './components/Prompt.js';
 import MountBoundary from './components/MountBoundary.js';
 import TitleBar from './components/TitleBar.js';
@@ -21,6 +21,9 @@ import {sanitizeText} from './hints/sanitize.js';
 import {unknownCommandLines} from './hints/typo.js';
 import {c} from './hints/style.js';
 import {isConsoleToggle, isQuitLine} from './view/keys.js';
+import {copyToClipboard} from './view/clipboard.js';
+import {suspendTerminal} from './view/suspend.js';
+import {subscribePrefs} from './view/prefs.js';
 
 type Line = {id: number; text: string; color?: string; welcome?: boolean};
 
@@ -84,6 +87,10 @@ let nextMountId = 0;
 
 export default function App({registry, log = noopLog}: {registry: Registry; log?: Logger}) {
 	const {exit} = useApp();
+	const {stdout} = useStdout();
+	const {stdin} = useStdin();
+	const [, setPrefsTick] = useState(0);
+	useEffect(() => subscribePrefs(() => setPrefsTick(n => n + 1)), []);
 	const {columns, rows} = useWindowSize();
 	const [lines, setLines] = useState<Line[]>(() => [
 		{
@@ -274,6 +281,8 @@ export default function App({registry, log = noopLog}: {registry: Registry; log?
 				setScroll(0);
 			},
 			exit,
+			copyToClipboard: text => copyToClipboard(stdout, text),
+			suspend: fn => suspendTerminal(stdin as never, stdout as never, fn),
 			mount: mount(
 				text => out(text),
 				() => {

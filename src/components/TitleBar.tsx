@@ -1,6 +1,7 @@
 import React from 'react';
 import {Box, Text} from 'ink';
 import {colorEnabled} from '../hints/style.js';
+import {getPrefs, type TitleBarColor} from '../view/prefs.js';
 import {stringCells, truncateCells} from '../hints/width.js';
 
 /** One inverse row: the title on the left, the detail right-aligned, the title shortened first. */
@@ -12,12 +13,16 @@ export function titleBarText(title: string, detail: string, columns: number): {l
 	return {left: left + ' '.repeat(Math.max(0, room - stringCells(left))), right};
 }
 
-export const TITLE_BAR_BG = '#808000';
-const TITLE_BAR_FG = '#000000';
+const BAR: Record<Exclude<TitleBarColor, 'inverse'>, {backgroundColor: string; color: string}> = {
+	olive: {backgroundColor: '#808000', color: '#000000'},
+	blue: {backgroundColor: '#1f4e8c', color: '#ffffff'},
+	teal: {backgroundColor: '#00796b', color: '#ffffff'},
+	gray: {backgroundColor: '#5a5a5a', color: '#ffffff'},
+};
 
-/** Olive with black text; with NO_COLOR an inverse bar. */
-export function titleBarStyle(env: Record<string, string | undefined> = process.env) {
-	return colorEnabled(env) ? {backgroundColor: TITLE_BAR_BG, color: TITLE_BAR_FG} : {inverse: true};
+/** The bar colour from the Appearance settings; inverse when colours are off or NO_COLOR is set. */
+export function titleBarStyle(env: Record<string, string | undefined> = process.env, color: TitleBarColor = getPrefs().titleBar) {
+	return colorEnabled(env) && color !== 'inverse' ? BAR[color] : {inverse: true};
 }
 
 export default function TitleBar({title, detail, columns}: {title: string; detail: string; columns: number}) {

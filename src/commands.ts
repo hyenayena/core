@@ -2,6 +2,37 @@ import {createElement} from 'react';
 import type {Command} from '../../../src/api.js';
 import Settings from './components/Settings.js';
 import {collectSettingsTabs} from './view/settings-tabs.js';
+import {getPrefs, setPrefs, TITLE_BAR_COLORS, type TitleBarColor} from './view/prefs.js';
+import type {SettingsTab} from '../../../src/api.js';
+
+const LABEL: Record<TitleBarColor, string> = {olive: 'Olive', blue: 'Blue', teal: 'Teal', gray: 'Gray', inverse: 'Inverse'};
+
+function appearanceTab(): SettingsTab {
+	return {
+		title: 'Appearance',
+		settings: [
+			{
+				key: 'titleBar',
+				label: 'Title bar',
+				description: 'Colour of the bar above the chat',
+				options: TITLE_BAR_COLORS.map(value => ({value, label: LABEL[value]})),
+				get: () => getPrefs().titleBar,
+				set: value => setPrefs({titleBar: value as TitleBarColor}),
+			},
+			{
+				key: 'colors',
+				label: 'Colours',
+				description: 'Colours in the console and hints (NO_COLOR also turns them off)',
+				options: [
+					{value: 'on', label: 'On'},
+					{value: 'off', label: 'Off'},
+				],
+				get: () => (getPrefs().colors ? 'on' : 'off'),
+				set: value => setPrefs({colors: value !== 'off'}),
+			},
+		],
+	};
+}
 import {buildCatalog} from './hints/catalog.js';
 import {helpLines} from './hints/help.js';
 import {unknownCommandLines} from './hints/typo.js';
@@ -37,6 +68,7 @@ export function createRegistry(extra: Command[]): Registry {
 			name: 'settings',
 			description: 'Open the settings',
 			usage: 'settings',
+			settings: appearanceTab(),
 			run: async (_args, ctx) => {
 				if (!ctx.mount) throw new Error('"settings" needs an interface that can show views');
 				const tabs = collectSettingsTabs(commands);

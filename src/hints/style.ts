@@ -1,6 +1,8 @@
+import {getPrefs} from '../view/prefs.js';
+
 export function colorEnabled(env: Record<string, string | undefined> = process.env): boolean {
 	const v = env['NO_COLOR'];
-	return v === undefined || v === '';
+	return (v === undefined || v === '') && getPrefs().colors;
 }
 
 /** Returns the colour name, or undefined when colour is disabled (attributes stay). */
