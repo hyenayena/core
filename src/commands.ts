@@ -1,4 +1,7 @@
+import {createElement} from 'react';
 import type {Command} from '../../../src/api.js';
+import Settings from './components/Settings.js';
+import {collectSettingsTabs} from './view/settings-tabs.js';
 import {buildCatalog} from './hints/catalog.js';
 import {helpLines} from './hints/help.js';
 import {unknownCommandLines} from './hints/typo.js';
@@ -30,6 +33,16 @@ export function createRegistry(extra: Command[]): Registry {
 			run: (args, ctx) => ctx.print(args.join(' ')),
 		},
 		...extra,
+		{
+			name: 'settings',
+			description: 'Open the settings',
+			usage: 'settings',
+			run: async (_args, ctx) => {
+				if (!ctx.mount) throw new Error('"settings" needs an interface that can show views');
+				const tabs = collectSettingsTabs(commands);
+				await ctx.mount(control => createElement(Settings, {tabs, control}), {target: 'panel'});
+			},
+		},
 		{
 			name: 'clear',
 			description: 'Clear the screen',

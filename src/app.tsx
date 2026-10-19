@@ -1,21 +1,43 @@
 import React, {useEffect, useMemo, useRef, useState, type ReactNode} from 'react';
-import {Box, Static, Text, useApp} from 'ink';
+import {Box, Static, Text, useApp, useInput, useWindowSize} from 'ink';
 import Prompt from './components/Prompt.js';
 import MountBoundary from './components/MountBoundary.js';
-import type {CommandContext, Logger, UiElement} from '../../../src/api.js';
+import type {
+	Command,
+	CommandContext,
+	FocusDirection,
+	Logger,
+	MountControl,
+	MountTarget,
+	UiElement,
+	ViewHost,
+} from '../../../src/api.js';
 import {noopLog} from './noop-log.js';
 import type {Registry} from './commands.js';
 import {buildCatalog} from './hints/catalog.js';
 import {sanitizeText} from './hints/sanitize.js';
 import {unknownCommandLines} from './hints/typo.js';
 import {c} from './hints/style.js';
+import {isConsoleToggle} from './view/keys.js';
 
 type Line = {id: number; text: string; color?: string};
 
 type Pending = {id: number; resolve: () => void; reject: (error: Error) => void};
 
+type Mounted = {id: number; element: UiElement};
+
+type Focus = 'main' | 'panel';
+
 const MAX_ERROR_LINES = 20;
 const MAX_ERROR_LINE = 4096;
+const MAX_PANEL_LINES = 500;
+// Below this width the open console covers the chat instead of sitting beside it
+const SPLIT_MIN_COLUMNS = 60;
+const PANEL_MAX_ROWS = 20;
+
+export const WELCOME = 'yena — type "help" for the list of commands';
+export const WELCOME_WITH_VIEW = 'yena — Ctrl+§ opens the console; type "help" there for the list of commands';
+export const PANEL_TITLE = 'Console · Ctrl+§ close · ← chat';
 
 function errorLines(error: unknown): string[] {
 	let message: string;
@@ -33,25 +55,100 @@ function errorLines(error: unknown): string[] {
 	return out.length > 0 ? out : ['unknown error'];
 }
 
+export type PanelGeometry = {split: boolean; panelColumns: number; mainColumns: number; panelRows: number};
+
+/** Sizes of the chat and console areas while a main view is shown. */
+export function panelGeometry(columns: number, rows: number, open: boolean): PanelGeometry {
+	const panelRows = Math.max(3, Math.min(PANEL_MAX_ROWS, rows - 3));
+	if (!open) return {split: false, panelColumns: 0, mainColumns: columns, panelRows};
+	if (columns < SPLIT_MIN_COLUMNS) return {split: false, panelColumns: columns, mainColumns: 0, panelRows};
+	const panelColumns = Math.min(columns - 30, Math.max(28, Math.round(columns * 0.4)));
+	return {split: true, panelColumns, mainColumns: columns - panelColumns, panelRows};
+}
+
+const autostartCommands = (commands: Command[]): Command[] =>
+	commands.filter(command => {
+		try {
+			return command?.autostart === true && typeof command.run === 'function';
+		} catch {
+			return false;
+		}
+	});
+
 let nextId = 0;
 let nextMountId = 0;
 
 export default function App({registry, log = noopLog}: {registry: Registry; log?: Logger}) {
 	const {exit} = useApp();
-	const [lines, setLines] = useState<Line[]>([
-		{id: nextId++, text: 'yena — type "help" for the list of commands', color: c('green')},
+	const {columns, rows} = useWindowSize();
+	const [lines, setLines] = useState<Line[]>(() => [
+		{
+			id: nextId++,
+			text: autostartCommands(registry.commands).length > 0 ? WELCOME_WITH_VIEW : WELCOME,
+			color: c('green'),
+		},
 	]);
+	const [panelLines, setPanelLines] = useState<Line[]>([]);
 	const catalog = useMemo(() => buildCatalog(registry.commands), [registry]);
 	const [history, setHistory] = useState<string[]>([]);
 
-	const [mounted, setMounted] = useState<{id: number; element: UiElement} | null>(null);
-	const pending = useRef<Pending | null>(null);
+	const [main, setMain] = useState<Mounted | null>(null);
+	const [panelView, setPanelView] = useState<Mounted | null>(null);
+	const [panelOpen, setPanelOpen] = useState(false);
+	const [focus, setFocus] = useState<Focus>('main');
+	const pending = useRef<Record<MountTarget, Pending | null>>({main: null, panel: null});
 
-	const settle = (id: number, error?: Error) => {
-		const current = pending.current;
+	// With no main view the console owns the screen, as a plain REPL.
+	const side = main !== null;
+	const geo = panelGeometry(columns, rows, panelOpen);
+	const consoleShown = !side || panelOpen;
+	const active: Focus = !side ? 'panel' : !panelOpen ? 'main' : focus;
+	const panelInner = side ? Math.max(1, geo.panelColumns - 2) : columns;
+
+	// Hosts are created once per view, so they read the latest layout through this ref.
+	const live = useRef({active, side, split: geo.split, panelOpen, mainColumns: geo.mainColumns, panelInner});
+	live.current = {active, side, split: geo.split, panelOpen, mainColumns: geo.mainColumns, panelInner};
+	const listeners = useRef<Set<() => void>>(new Set());
+	useEffect(() => {
+		for (const l of [...listeners.current]) {
+			try {
+				l();
+			} catch {
+				continue;
+			}
+		}
+	}, [active, geo.mainColumns, panelInner, panelOpen, side]);
+
+	const makeHost = (target: MountTarget): ViewHost => ({
+		isFocused: () => live.current.active === target,
+		columns: () => (target === 'main' ? live.current.mainColumns : live.current.panelInner),
+		subscribe: listener => {
+			listeners.current.add(listener);
+			return () => {
+				listeners.current.delete(listener);
+			};
+		},
+		move: (direction: FocusDirection) => {
+			const l = live.current;
+			if (!l.side || !l.panelOpen || !l.split) return false;
+			const to: Focus | undefined = target === 'main' && direction === 'right' ? 'panel' : target === 'panel' && direction === 'left' ? 'main' : undefined;
+			if (!to) return false;
+			setFocus(to);
+			return true;
+		},
+		isHostKey: isConsoleToggle,
+	});
+
+	const settle = (target: MountTarget, id: number, error?: Error) => {
+		const current = pending.current[target];
 		if (!current || current.id !== id) return;
-		pending.current = null;
-		setMounted(null);
+		pending.current[target] = null;
+		if (target === 'main') {
+			setMain(null);
+			setFocus('panel');
+		} else {
+			setPanelView(null);
+		}
 		if (error) {
 			log.warn('view failed', {id, err: error});
 			current.reject(error);
@@ -64,46 +161,101 @@ export default function App({registry, log = noopLog}: {registry: Registry; log?
 	// An unmount (exit, signal) must not leave a command awaiting forever
 	useEffect(
 		() => () => {
-			pending.current?.resolve();
-			pending.current = null;
+			for (const target of ['main', 'panel'] as const) {
+				pending.current[target]?.resolve();
+				pending.current[target] = null;
+			}
 		},
 		[],
 	);
 
-	const print = (text: string, color?: string) =>
+	const printMain = (text: string, color?: string) =>
 		setLines(prev => [...prev, {id: nextId++, text, color}]);
+	const printPanel = (text: string, color?: string) =>
+		setPanelLines(prev => [...prev, {id: nextId++, text, color}].slice(-MAX_PANEL_LINES));
+	const sideRef = useRef(side);
+	sideRef.current = side;
+	// Console output stays in the panel while it sits beside a view, else it goes to the scrollback.
+	const printConsole = (text: string, color?: string) => (sideRef.current ? printPanel : printMain)(text, color);
 
-	const ctx: CommandContext = {
-		print: text => print(text),
-		// Clear the real terminal too, since <Static> output stays on screen
-		clear: () => {
-			process.stdout.write('\x1b[2J\x1b[3J\x1b[H');
-			setLines([]);
-		},
-		exit,
-		mount: build =>
+	const mount =
+		(fallbackPrint: (text: string) => void, onMain: () => void): NonNullable<CommandContext['mount']> =>
+		(build, options) =>
 			new Promise<void>((resolve, reject) => {
-				if (pending.current) {
+				const target: MountTarget = options?.target === 'panel' ? 'panel' : 'main';
+				if (pending.current[target]) {
 					reject(new Error('A view is already mounted'));
 					return;
 				}
 				const id = nextMountId++;
+				const control: MountControl = {
+					close: () => settle(target, id),
+					print: target === 'main' ? text => printMain(text) : fallbackPrint,
+					host: makeHost(target),
+				};
 				let element: UiElement;
 				try {
-					element = build({close: () => settle(id)});
+					element = build(control);
 				} catch (error) {
 					reject(error instanceof Error ? error : new Error(String(error)));
 					return;
 				}
-				pending.current = {id, resolve, reject};
+				pending.current[target] = {id, resolve, reject};
 				log.debug('view mounted', {id});
-				setMounted({id, element});
-			}),
+				if (target === 'main') {
+					onMain();
+					setMain({id, element});
+					setFocus('main');
+				} else {
+					setPanelView({id, element});
+					setFocus('panel');
+				}
+			});
+
+	const makeCtx = (print: (text: string, color?: string) => void): CommandContext => {
+		// A command that opened the main view keeps printing into the scrollback above it.
+		let ownsMain = false;
+		const out = (text: string, color?: string) => (ownsMain ? printMain : print)(text, color);
+		return {
+			print: text => out(text),
+			// Clear the real terminal too, since <Static> output stays on screen
+			clear: () => {
+				process.stdout.write('\x1b[2J\x1b[3J\x1b[H');
+				setLines([]);
+				setPanelLines([]);
+			},
+			exit,
+			mount: mount(
+				text => out(text),
+				() => {
+					ownsMain = true;
+				},
+			),
+		};
 	};
+
+	const runCommand = async (command: Command, name: string, args: string[], print: (text: string, color?: string) => void) => {
+		try {
+			await command.run(args, makeCtx(print));
+		} catch (error) {
+			log.warn('command failed', {command: name, err: error});
+			errorLines(error).forEach((text, i) => print(i === 0 ? `Error: ${text}` : `  ${text}`, c('red')));
+		}
+	};
+
+	useEffect(() => {
+		for (const command of autostartCommands(registry.commands)) {
+			let name = 'unknown';
+			try {
+				name = String(command.name);
+			} catch {}
+			void runCommand(command, name, [], printMain);
+		}
+	}, [registry]);
 
 	const handleSubmit = async (raw: string) => {
 		const line = raw.trim();
-		print(`> ${sanitizeText(raw, 4096)}`, c('gray'));
+		printConsole(`> ${sanitizeText(raw, 4096)}`, c('gray'));
 		if (!line) return;
 
 		setHistory(prev => (prev.at(-1) === line ? prev : [...prev, line]));
@@ -112,16 +264,66 @@ export default function App({registry, log = noopLog}: {registry: Registry; log?
 		const command = registry.find(name!);
 		if (!command) {
 			log.debug('unknown command', {unknownCommand: true});
-			for (const text of unknownCommandLines(catalog, name!)) print(text, c('red'));
+			for (const text of unknownCommandLines(catalog, name!)) printConsole(text, c('red'));
 			return;
 		}
+		await runCommand(command, name!, args, printConsole);
+	};
 
-		try {
-			await command.run(args, ctx);
-		} catch (error) {
-			log.warn('command failed', {command: name, err: error});
-			errorLines(error).forEach((text, i) => print(i === 0 ? `Error: ${text}` : `  ${text}`, c('red')));
-		}
+	useInput(input => {
+		if (!isConsoleToggle(input) || !side) return;
+		const open = !panelOpen;
+		setPanelOpen(open);
+		setFocus(open ? 'panel' : 'main');
+	});
+
+	const consoleBody = (inner: number, height?: number) =>
+		panelView ? (
+			<MountBoundary key={panelView.id} onError={error => settle('panel', panelView.id, error)}>
+				{panelView.element as ReactNode}
+			</MountBoundary>
+		) : (
+			<Prompt
+				history={history}
+				catalog={catalog}
+				onSubmit={handleSubmit}
+				onInterrupt={exit}
+				columns={inner}
+				{...(height !== undefined && {rows: height})}
+				active={active === 'panel'}
+				isHostKey={isConsoleToggle}
+				{...(side && geo.split && {onLeftEdge: () => setFocus('main')})}
+			/>
+		);
+
+	const panel = () => {
+		const height = geo.panelRows;
+		const outputRows = Math.max(0, height - 3);
+		return (
+			<Box
+				flexDirection="column"
+				width={geo.panelColumns}
+				height={height}
+				borderStyle="single"
+				borderTop={false}
+				borderRight={false}
+				borderBottom={false}
+				borderDimColor={active !== 'panel'}
+				paddingLeft={1}
+			>
+				<Text dimColor wrap="truncate-end">
+					{geo.split ? PANEL_TITLE : 'Console · Ctrl+§ close'}
+				</Text>
+				<Box flexDirection="column" flexGrow={1} justifyContent="flex-end" overflow="hidden">
+					{panelLines.slice(-outputRows).map(line => (
+						<Text key={line.id} color={line.color} wrap="truncate-end">
+							{line.text}
+						</Text>
+					))}
+				</Box>
+				{consoleBody(panelInner, height - 1)}
+			</Box>
+		);
 	};
 
 	return (
@@ -133,13 +335,24 @@ export default function App({registry, log = noopLog}: {registry: Registry; log?
 					</Text>
 				)}
 			</Static>
-			{mounted ? (
-				<MountBoundary key={mounted.id} onError={error => settle(mounted.id, error)}>
-					{/* UiElement is opaque in the host contract; it is a React element here */}
-					{mounted.element as ReactNode}
-				</MountBoundary>
+			{main ? (
+				<Box flexDirection="row">
+					{/* Kept mounted while covered, so the view and its session survive */}
+					<Box
+						flexDirection="column"
+						justifyContent="flex-end"
+						width={geo.mainColumns > 0 ? geo.mainColumns : undefined}
+						display={geo.mainColumns > 0 ? 'flex' : 'none'}
+					>
+						<MountBoundary key={main.id} onError={error => settle('main', main.id, error)}>
+							{/* UiElement is opaque in the host contract; it is a React element here */}
+							{main.element as ReactNode}
+						</MountBoundary>
+					</Box>
+					{panelOpen && panel()}
+				</Box>
 			) : (
-				<Prompt history={history} catalog={catalog} onSubmit={handleSubmit} onInterrupt={exit} />
+				consoleShown && consoleBody(columns)
 			)}
 		</Box>
 	);

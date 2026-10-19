@@ -23,6 +23,13 @@ type Props = {
 	catalog: Catalog;
 	onSubmit: (line: string) => void;
 	onInterrupt: () => void;
+	// Defaults: the terminal size, always active.
+	columns?: number;
+	rows?: number;
+	active?: boolean;
+	// Left arrow on an empty line (moves focus to the neighbouring area).
+	onLeftEdge?: () => void;
+	isHostKey?: (input: string) => boolean;
 };
 
 function toKeyInput(input: string, key: Key): KeyInput {
@@ -58,14 +65,26 @@ function graphemeIndex(value: string, cursor: number): number {
 	return index;
 }
 
-export default function Prompt({prompt = '> ', history, catalog, onSubmit, onInterrupt}: Props) {
+export default function Prompt({
+	prompt = '> ',
+	history,
+	catalog,
+	onSubmit,
+	onInterrupt,
+	active = true,
+	onLeftEdge,
+	isHostKey,
+	...size
+}: Props) {
 	// Keys can arrive faster than React re-renders, so the source of truth lives
 	// in a ref and the state copy only drives rendering.
 	const stateRef = useRef<PromptState>(initialState);
 	const [state, setState] = useState<PromptState>(initialState);
 	const historyRef = useRef(history);
 	historyRef.current = history;
-	const {columns, rows} = useWindowSize();
+	const terminal = useWindowSize();
+	const columns = size.columns ?? terminal.columns;
+	const rows = size.rows ?? terminal.rows;
 
 	const env = useMemo<StepEnv>(
 		() => ({
@@ -85,8 +104,15 @@ export default function Prompt({prompt = '> ', history, catalog, onSubmit, onInt
 		else if (result.effect === 'submit') onSubmit(result.line ?? '');
 	};
 
-	useInput((input, key) => apply(toKeyInput(input, key)));
-	usePaste(text => apply({input: '', paste: text}));
+	useInput(
+		(input, key) => {
+			if (isHostKey?.(input)) return;
+			if (key.leftArrow && onLeftEdge && stateRef.current.value === '') return onLeftEdge();
+			apply(toKeyInput(input, key));
+		},
+		{isActive: active},
+	);
+	usePaste(text => apply({input: '', paste: text}), {isActive: active});
 
 	const hints = visibleHints(state, env);
 	const ghost = ghostText(state, env);
@@ -100,9 +126,11 @@ export default function Prompt({prompt = '> ', history, catalog, onSubmit, onInt
 	return (
 		<Box flexDirection="column">
 			<Text wrap="truncate-end">
-				<Text color={c('cyan')}>{prompt}</Text>
+				<Text color={c('cyan')} dimColor={!active}>
+					{prompt}
+				</Text>
 				{win.before}
-				<Text inverse dimColor={ghostCell}>
+				<Text inverse={active} dimColor={ghostCell}>
 					{win.cursorCell || ' '}
 				</Text>
 				{win.after}

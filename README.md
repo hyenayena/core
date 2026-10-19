@@ -2,14 +2,25 @@
 
 Command REPL for yena (Ink). Commands receive a `CommandContext` (see `src/api.ts` in the host).
 
-## `ctx.mount(build)`
+## Screen layout: main view and console
 
-Replaces the prompt with an Ink view until it is closed.
+- The console is the command prompt (with hints, below). With no main view it owns the whole screen, as a plain REPL.
+- A main view (e.g. the claude chat) is mounted with `ctx.mount(build)` (target `main`, the default). It then owns the screen and the input, and the console becomes a side panel on the right: Ctrl+§ opens and closes it (terminals send a plain `§`, which therefore cannot be typed). Opening focuses the console, closing focuses the main view.
+- With the panel open, ← on an empty console line moves the input to the main view; a main view moves it back with `control.host.move('right')` (the claude chat does it on → with an empty draft). Both stay mounted; only the focused one reads keys.
+- The panel takes 40% of the width (at least 28 columns, leaving at least 30), at most 20 rows (rows - 3). Below 60 columns the open console covers the main view instead (it stays mounted, hidden).
+- Console commands print into the panel (last 500 lines kept, the visible tail shown) while a main view is shown, into the scrollback otherwise. A command that mounted the main view prints into the scrollback from then on.
+- Commands with `autostart: true` run once at startup with no arguments (their output goes to the scrollback); the welcome line then mentions Ctrl+§.
+- `settings` opens a settings screen in the console: one tab per command that declares `settings` (`SettingsTab {title, settings: Setting[]}`, choice settings with `get`/`set`; malformed entries are dropped, text is sanitised). ↑↓ select, Enter saves, ←→ switch tabs (← on the first tab moves to the main view), Esc or Ctrl+C closes.
 
-- `build(control)` runs once, synchronously; the returned element is shown instead of the prompt.
+## `ctx.mount(build, options?)`
+
+Shows an Ink view in `options.target`: `main` (default) or `panel` (in place of the console prompt).
+
+- `build(control)` runs once, synchronously; the returned element is shown in that area.
+- `control.print` prints into that area's output (scrollback for `main`); `control.host` (`ViewHost`) gives `isFocused()`, `columns()`, `subscribe(listener)`, `move(direction)` and `isHostKey(input)`. A view must read input only while focused (`useInput(..., {isActive})`), lay out in `columns()` and ignore host keys.
 - The returned promise resolves when `control.close()` is called (idempotent) or the app unmounts.
-- It rejects if another view is already mounted, `build` throws, or the element throws while rendering.
-- The Prompt is unmounted while a view is shown, so the view is the only text-input consumer.
+- It rejects if that area already shows a view (`A view is already mounted`), `build` throws, or the element throws while rendering.
+- With no main view, a `main` mount replaces the console until it is closed.
 - The view is wrapped in `MountBoundary` (error boundary): a render error rejects the `mount` promise and restores the prompt.
 - Only one `<Static>` is honoured by Ink and `App` owns it: a view flushes completed output through `ctx.print` and must not render its own `<Static>`. `print` never trims the retained lines.
 - `main.tsx` renders with `exitOnCtrlC: false`: at the prompt Ctrl+C exits; inside a view the view receives it. A view that ignores Ctrl+C cannot be interrupted (raw mode); `MountBoundary` only catches render errors.
@@ -58,6 +69,7 @@ Manual TTY check:
 10. Type CJK/emoji and move the cursor with Left/Right.
 11. `NO_COLOR=1`: the highlight stays readable (underline, marker).
 12. Ctrl+C at the prompt exits; inside `claude chat` the prompt and hints are hidden.
+13. With the claude module and a credential: the chat opens at startup. Ctrl+§ opens the console on the right, ← moves to the chat, → (empty draft) back, Ctrl+§ closes it. `settings` shows the Claude tab; pick a model, Esc, then `chat` opens a new chat with it (status bar shows the model). Below 60 columns the console covers the chat.
 
 ## Tests
 
