@@ -10,14 +10,14 @@ Command REPL for yena (Ink). Commands receive a `CommandContext` (see `src/api.t
 - The panel takes 40% of the width (at least 28 columns, leaving at least 30), at most 20 rows (rows - 3). Below 60 columns the open console covers the main view instead (it stays mounted, hidden).
 - Console commands print into the panel (last 500 lines kept, the visible tail shown) while a main view is shown, into the scrollback otherwise. A command that mounted the main view prints into the scrollback from then on.
 - Commands with `autostart: true` run once at startup with no arguments (their output goes to the scrollback); the welcome line then mentions Ctrl+§.
-- `settings` opens a settings screen in the console: one tab per command that declares `settings` (`SettingsTab {title, settings: Setting[]}`, choice settings with `get`/`set`; malformed entries are dropped, text is sanitised). ↑↓ select, Enter saves, ←→ switch tabs (← on the first tab moves to the main view), Esc or Ctrl+C closes.
+- `settings` opens a settings screen in the console: one tab per command that declares `settings` (`SettingsTab {title, settings: Setting[]}`, choice settings with `get`/`set`; malformed entries are dropped, text is sanitised). ↑↓ select, Enter saves the choice, closes the screen and prints `<tab> · <setting>: <option>` in the console; ←→ switch tabs (← on the first tab moves to the main view), Esc or Ctrl+C closes without saving. The screen gets the whole panel (`host.rows()`) and scrolls to keep the selection (and its label) visible; the hint row shows `· <shown>/<total>` when it scrolls.
 
 ## `ctx.mount(build, options?)`
 
 Shows an Ink view in `options.target`: `main` (default) or `panel` (in place of the console prompt).
 
 - `build(control)` runs once, synchronously; the returned element is shown in that area.
-- `control.print` prints into that area's output (scrollback for `main`); `control.host` (`ViewHost`) gives `isFocused()`, `columns()`, `subscribe(listener)`, `move(direction)` and `isHostKey(input)`. A view must read input only while focused (`useInput(..., {isActive})`), lay out in `columns()` and ignore host keys.
+- `control.print` prints into that area's output (scrollback for `main`); `control.host` (`ViewHost`) gives `isFocused()`, `columns()`, `rows()` (the panel height less its title, or the terminal height), `subscribe(listener)`, `move(direction)` and `isHostKey(input)`. A view must read input only while focused (`useInput(..., {isActive})`), lay out in `columns()` and ignore host keys.
 - The returned promise resolves when `control.close()` is called (idempotent) or the app unmounts.
 - It rejects if that area already shows a view (`A view is already mounted`), `build` throws, or the element throws while rendering.
 - With no main view, a `main` mount replaces the console until it is closed.

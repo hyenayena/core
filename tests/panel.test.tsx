@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import React, {useEffect, useState} from 'react';
 import {Text, useInput} from 'ink';
 import App, {panelGeometry} from '../src/app.js';
+import {windowStart} from '../src/components/Settings.js';
 import {createRegistry} from '../src/commands.js';
 import {mountHarness} from './testkit.js';
 import type {Command, MountControl, Setting} from '../../../src/api.js';
@@ -200,14 +201,19 @@ test('settings opens in the console with module tabs and saves a choice', async 
 	await type(ENTER);
 	await h.settle(60);
 	let frame = h.lastFrame();
-	assert.match(frame, /Settings/);
-	assert.match(frame, /Claude/);
+	assert.match(frame, /Settings  Claude/);
 	assert.match(frame, /Chat model/);
 	assert.match(frame, /● Default/);
 	await type(DOWN);
 	await type(ENTER);
 	await h.settle(60);
 	assert.equal(store.value, 'opus');
+	frame = h.lastFrame();
+	assert.doesNotMatch(frame, /↑↓ select/);
+	assert.match(frame, /Claude · Chat model: Opus/);
+	await type('settings');
+	await type(ENTER);
+	await h.settle(60);
 	assert.match(h.lastFrame(), /● Opus/);
 	await type(RIGHT);
 	await h.settle(60);
@@ -215,9 +221,36 @@ test('settings opens in the console with module tabs and saves a choice', async 
 	await type(ESC);
 	await h.settle(60);
 	frame = h.lastFrame();
-	assert.doesNotMatch(frame, /Settings/);
+	assert.doesNotMatch(frame, /↑↓ select/);
 	assert.match(frame, /Console/);
 	assert.match(frame, /CHAT/);
+	h.unmount();
+});
+
+test('settings taller than the panel scroll inside it and never overlap', async () => {
+	const many: Setting[] = Array.from({length: 4}, (_v, i) => ({...modelSetting({}), key: `k${i}`, label: `Setting ${i}`}));
+	const tabbed: Command = {name: 'tabbed', description: 'x', settings: {title: 'Claude', settings: many}, run: () => {}};
+	const rows = 14;
+	const {h, type} = setup([tabbed], {columns: 100, rows});
+	await h.settle(60);
+	await type('§');
+	await type('help');
+	await type(ENTER);
+	await type('settings');
+	await type(ENTER);
+	await h.settle(60);
+	const check = () => {
+		const frame = h.lastFrame();
+		const panel = frame.split('\n').filter(l => l.includes('│')).map(l => l.slice(l.indexOf('│') + 2).trimEnd());
+		assert.ok(panel.length <= rows - 3, `panel has ${panel.length} rows`);
+		for (const line of panel) assert.doesNotMatch(line, /(Default|Opus|Haiku).*(Default|Opus|Haiku)/, line);
+		return panel.join('\n');
+	};
+	assert.match(check(), /Setting 0/);
+	for (let i = 0; i < 11; i++) await type(DOWN);
+	const shown = check();
+	assert.match(shown, /Setting 3/);
+	assert.doesNotMatch(shown, /Setting 0/);
 	h.unmount();
 });
 
@@ -234,4 +267,14 @@ test('settings without a chat runs full width and malformed tabs are dropped', a
 	await h.settle(60);
 	assert.match(h.lastFrame(), /^>\s*$/m);
 	h.unmount();
+});
+
+test('windowStart keeps the focus visible and pulls in its label when it fits', () => {
+	assert.equal(windowStart(5, 10, 3, 0), 0);
+	assert.equal(windowStart(30, 10, 0, 0), 0);
+	assert.equal(windowStart(30, 10, 29, 25), 20);
+	assert.equal(windowStart(30, 10, 15, 12), 10);
+	assert.equal(windowStart(30, 5, 15, 2), 13);
+	const s = windowStart(30, 6, 14, 11);
+	assert.ok(s <= 11 && 14 < s + 6);
 });

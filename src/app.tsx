@@ -106,8 +106,11 @@ export default function App({registry, log = noopLog}: {registry: Registry; log?
 	const panelInner = side ? Math.max(1, geo.panelColumns - 2) : columns;
 
 	// Hosts are created once per view, so they read the latest layout through this ref.
-	const live = useRef({active, side, split: geo.split, panelOpen, mainColumns: geo.mainColumns, panelInner});
-	live.current = {active, side, split: geo.split, panelOpen, mainColumns: geo.mainColumns, panelInner};
+	// Without a chat the console view has the screen, less one row so Ink never clears it.
+	const panelViewRows = side ? Math.max(1, geo.panelRows - 1) : Math.max(1, rows - 1);
+	const snapshot = {active, side, split: geo.split, panelOpen, mainColumns: geo.mainColumns, panelInner, rows, panelViewRows};
+	const live = useRef(snapshot);
+	live.current = snapshot;
 	const listeners = useRef<Set<() => void>>(new Set());
 	useEffect(() => {
 		for (const l of [...listeners.current]) {
@@ -117,11 +120,12 @@ export default function App({registry, log = noopLog}: {registry: Registry; log?
 				continue;
 			}
 		}
-	}, [active, geo.mainColumns, panelInner, panelOpen, side]);
+	}, [active, geo.mainColumns, panelInner, panelOpen, side, rows, panelViewRows]);
 
 	const makeHost = (target: MountTarget): ViewHost => ({
 		isFocused: () => live.current.active === target,
 		columns: () => (target === 'main' ? live.current.mainColumns : live.current.panelInner),
+		rows: () => (target === 'main' ? live.current.rows : live.current.panelViewRows),
 		subscribe: listener => {
 			listeners.current.add(listener);
 			return () => {
@@ -311,17 +315,26 @@ export default function App({registry, log = noopLog}: {registry: Registry; log?
 				borderDimColor={active !== 'panel'}
 				paddingLeft={1}
 			>
-				<Text dimColor wrap="truncate-end">
-					{geo.split ? PANEL_TITLE : 'Console · Ctrl+§ close'}
-				</Text>
-				<Box flexDirection="column" flexGrow={1} justifyContent="flex-end" overflow="hidden">
-					{panelLines.slice(-outputRows).map(line => (
-						<Text key={line.id} color={line.color} wrap="truncate-end">
-							{line.text}
-						</Text>
-					))}
+				<Box flexShrink={0}>
+					<Text dimColor wrap="truncate-end">
+						{geo.split ? PANEL_TITLE : 'Console · Ctrl+§ close'}
+					</Text>
 				</Box>
-				{consoleBody(panelInner, height - 1)}
+				{/* A console view gets the whole panel; the output only fills what the prompt leaves */}
+				{!panelView && (
+					<Box flexDirection="column" flexGrow={1} flexShrink={1} justifyContent="flex-end" overflow="hidden">
+						{panelLines.slice(-outputRows).map(line => (
+							<Box key={line.id} flexShrink={0}>
+								<Text color={line.color} wrap="truncate-end">
+									{line.text}
+								</Text>
+							</Box>
+						))}
+					</Box>
+				)}
+				<Box flexDirection="column" flexShrink={0} overflow="hidden">
+					{consoleBody(panelInner, height - 1)}
+				</Box>
 			</Box>
 		);
 	};
