@@ -4,6 +4,7 @@ Command REPL for yena (Ink). Commands receive a `CommandContext` (see `src/api.t
 
 ## Screen layout: main view and console
 
+- At startup `main.tsx` sets the terminal window/tab title to `yena` (OSC 0, only when stdout is a TTY; `src/view/title.ts`).
 - The console is the command prompt (with hints, below). With no main view it owns the whole screen, as a plain REPL.
 - A main view (e.g. the claude chat) is mounted with `ctx.mount(build)` (target `main`, the default). It then owns the screen and the input, and the console becomes a side panel on the right: Ctrl+§ opens and closes it (terminals send a plain `§`, which therefore cannot be typed). Opening focuses the console, closing focuses the main view.
 - With the panel open, ← on an empty console line moves the input to the main view; a main view moves it back with `control.host.move('right')` (the claude chat does it on → with an empty draft). Both stay mounted; only the focused one reads keys.
