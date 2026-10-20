@@ -66,7 +66,7 @@ Errors: a command that throws prints `Error: <message>` in red, extra message li
 Not implemented yet (planned only when requested): nested subcommands (`Subcommand.subcommands?` in the host contract, Phase 2a) and dynamic argument completion (`Command.complete?`/`Candidate`, Phase 2b: additive optional members, 150 ms timeout, debounce, sanitised, at most 50 candidates; `claude` would supply `--new`/`--from-file`, `mod` the installed module names). Today `claude auth status|key|…` is not offered.
 
 Manual TTY check:
-1. `make yena`. Type `e`: list with `echo`, `exit`, `help`, `clear`, `claude`, ghost, first row marked `›`.
+1. `./yena`. Type `e`: list with `echo`, `exit`, `help`, `clear`, `claude`, ghost, first row marked `›`.
 2. Tab accepts `echo `; type `hi`, Enter prints `hi`.
 3. Type `ex`, Esc: the list disappears; Up recalls history; Down returns to empty.
 4. Type `m`, Down, Enter: the line becomes `mod ` and nothing runs; Enter again runs `mod`.
