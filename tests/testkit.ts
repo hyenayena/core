@@ -7,12 +7,8 @@ const CONTROL_ONLY = new RegExp(String.fromCharCode(27) + '\\[[0-9;?]*[A-Za-z]',
 
 export const wait = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
 
-export function mountHarness(
-	element: ReactElement,
-	size = {columns: 80, rows: 40},
-	options: {debug?: boolean} = {},
-) {
-	const stdin = Object.assign(new PassThrough(), {
+export function createFakeTty() {
+	return Object.assign(new PassThrough(), {
 		isTTY: true,
 		raw: [] as boolean[],
 		setRawMode(value: boolean) {
@@ -22,7 +18,25 @@ export function mountHarness(
 		ref() {},
 		unref() {},
 	});
-	const stdout = Object.assign(new PassThrough(), {isTTY: true, ...size});
+}
+
+export type FakeTty = ReturnType<typeof createFakeTty>;
+
+export function createFakeStdout(size = {columns: 80, rows: 40}) {
+	return Object.assign(new PassThrough(), {isTTY: true, ...size});
+}
+
+/**
+ * `tty` receives the presses; `stdin` is what Ink reads (default: `tty`), e.g. an input proxy wrapping `tty`.
+ */
+export function mountHarness(
+	element: ReactElement,
+	size = {columns: 80, rows: 40},
+	options: {debug?: boolean; tty?: FakeTty; stdin?: unknown; stdout?: ReturnType<typeof createFakeStdout>} = {},
+) {
+	const tty = options.tty ?? createFakeTty();
+	const stdin = options.stdin ?? tty;
+	const stdout = options.stdout ?? createFakeStdout(size);
 	const chunks: string[] = [];
 	stdout.on('data', chunk => chunks.push(String(chunk)));
 
@@ -37,8 +51,8 @@ export function mountHarness(
 	});
 
 	return {
-		raw: stdin.raw,
-		press: (sequence: string) => stdin.write(sequence),
+		raw: tty.raw,
+		press: (sequence: string) => tty.write(sequence),
 		// Escape is flushed by Ink after 20 ms, so waits must exceed that
 		settle: (ms = 30) => wait(ms),
 		// Mode switches (bracketed paste, cursor) arrive as chunks of their own; skip them.

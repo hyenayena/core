@@ -28,3 +28,25 @@ test('suspend detaches key reading and raw mode for the child, then restores the
 	await assert.rejects(suspendTerminal(stdin as never, stdout as never, () => Promise.reject(new Error('child failed'))), /child failed/);
 	assert.deepEqual(stdin.listeners('readable'), [reader]);
 });
+
+test('suspend pauses mouse reporting before leaving and resumes it after returning', async () => {
+	const order: string[] = [];
+	const stdin = Object.assign(new EventEmitter(), {isRaw: true, setRawMode(m: boolean) {
+		order.push(`raw:${m}`);
+	}});
+	const stdout = Object.assign(new EventEmitter(), {
+		write: (s: string) => void order.push(/\?1049l/.test(s) ? 'leave' : /\?1049h/.test(s) ? 'return' : 'other'),
+	});
+	const mouse = {pause: () => void order.push('pause'), resume: () => void order.push('resume')};
+	await suspendTerminal(stdin as never, stdout as never, () => void order.push('child'), mouse);
+	assert.deepEqual(order, ['raw:false', 'pause', 'leave', 'child', 'raw:true', 'return', 'resume']);
+	order.length = 0;
+	await assert.rejects(
+		suspendTerminal(stdin as never, stdout as never, () => {
+			order.push('child');
+			throw new Error('child failed');
+		}, mouse),
+		/child failed/,
+	);
+	assert.deepEqual(order, ['raw:false', 'pause', 'leave', 'child', 'raw:true', 'return', 'resume']);
+});

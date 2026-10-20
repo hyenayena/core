@@ -377,6 +377,34 @@ function run(s: PromptState, k: KeyInput, env: StepEnv): StepResult {
 	return {state: s};
 }
 
+/** Moves the cursor to grapheme `graphemeIndex` (clamped), like a cursor key; never throws. */
+export function clickCursor(s: PromptState, graphemeIndex: number): PromptState {
+	try {
+		const b = boundaries(s.value);
+		const i = Math.min(Math.max(0, Math.floor(graphemeIndex) || 0), b.length - 1);
+		return reset(s, {cursor: b[i] as number});
+	} catch {
+		return s;
+	}
+}
+
+/**
+ * Accepts the visible hint item `itemIndex` like Enter after navigation (no cycle, never submits).
+ * During a Tab cycle the item replaces the text typed before the first Tab and the cycle ends.
+ * Returns `s` unchanged when there is no such item; never throws.
+ */
+export function clickHint(s: PromptState, itemIndex: number, env: StepEnv): PromptState {
+	try {
+		const h = visibleHints(s, env);
+		if (!h || !Number.isInteger(itemIndex) || !h.items[itemIndex]) return s;
+		const c = validCycle(s);
+		const base = c ? {...s, value: c.original, cursor: c.original.length} : s;
+		return accept(base, h, itemIndex, false);
+	} catch {
+		return s;
+	}
+}
+
 function submit(s: PromptState): StepResult {
 	return {state: {...initialState}, effect: 'submit', line: s.value};
 }

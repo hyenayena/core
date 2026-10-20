@@ -3,7 +3,8 @@ import {Box, Text} from 'ink';
 
 export type TranscriptLine = {id: number; text: string; color?: string};
 
-export const scrollHint = (newer: number) => `↓ ${newer} newer line${newer === 1 ? '' : 's'} · PgDn or Shift+↓`;
+export const scrollHint = (newer: number, keys = 'PgDn or Shift+↓') =>
+	`↓ ${newer} newer line${newer === 1 ? '' : 's'}${keys === '' ? '' : ` · ${keys}`}`;
 
 /**
  * The scrollback of the full-screen app. `scroll` counts logical lines hidden below the

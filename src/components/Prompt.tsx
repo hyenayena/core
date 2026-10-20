@@ -1,8 +1,10 @@
-import React, {useMemo, useRef, useState} from 'react';
-import {Box, Text, useInput, usePaste, useWindowSize, type Key} from 'ink';
+import React, {useEffect, useMemo, useRef, useState} from 'react';
+import {Box, Text, measureElement, useInput, usePaste, useWindowSize, type DOMElement, type Key} from 'ink';
 import type {Catalog} from '../hints/catalog.js';
 import {computeHints} from '../hints/model.js';
 import {
+	clickCursor,
+	clickHint,
 	ghostText,
 	initialState,
 	step,
@@ -11,12 +13,13 @@ import {
 	type PromptState,
 	type StepEnv,
 } from '../hints/editor.js';
-import {layoutHints} from '../hints/layout.js';
-import {windowLine} from '../hints/viewport.js';
+import {layoutHints, type HintRow} from '../hints/layout.js';
+import {indexAtCell, windowLine, type Windowed} from '../hints/viewport.js';
 import {c} from '../hints/style.js';
-import {graphemes} from '../hints/width.js';
+import {graphemes, stringCells} from '../hints/width.js';
 import Hints from './Hints.js';
 import {createDoubleEsc} from '../view/keys.js';
+import type {MouseInputEvent} from '../mouse/sgr.js';
 
 type Props = {
 	prompt?: string;
@@ -33,6 +36,17 @@ type Props = {
 	// Esc twice on an empty line (closes the side console).
 	onDoubleEscape?: () => void;
 	isHostKey?: (input: string, key: Key) => boolean;
+	// Set to the click handler while mounted; it returns true when the click acted.
+	mouseRef?: React.MutableRefObject<((e: MouseInputEvent) => boolean) | null>;
+};
+
+type Rendered = {
+	state: PromptState;
+	win: Windowed;
+	length: number;
+	cursor: number;
+	promptWidth: number;
+	rows: HintRow[];
 };
 
 function toKeyInput(input: string, key: Key): KeyInput {
@@ -78,6 +92,7 @@ export default function Prompt({
 	onLeftEdge,
 	onDoubleEscape,
 	isHostKey,
+	mouseRef,
 	...size
 }: Props) {
 	// Keys can arrive faster than React re-renders, so the source of truth lives
@@ -132,11 +147,58 @@ export default function Prompt({
 
 	const gs = graphemes(state.value);
 	const promptCells = graphemes(prompt).length;
-	const win = windowLine(gs, graphemeIndex(state.value, state.cursor), ghost, columns - 1 - promptCells);
+	const cursorIndex = graphemeIndex(state.value, state.cursor);
+	const win = windowLine(gs, cursorIndex, ghost, columns - 1 - promptCells);
 	const ghostCell = ghost !== '' && state.cursor >= state.value.length;
 
+	const rootRef = useRef<DOMElement>(null);
+	const rendered = useRef<Rendered | null>(null);
+	rendered.current = {
+		state,
+		win,
+		length: gs.length,
+		cursor: cursorIndex,
+		promptWidth: stringCells(prompt),
+		rows: hintRows,
+	};
+
+	const onMouse = (e: MouseInputEvent): boolean => {
+		if (e.kind !== 'press' || e.button !== 'left') return false;
+		const view = rendered.current;
+		const node = rootRef.current;
+		// Keys may have outrun the last render; the click refers to what is on screen.
+		if (!view || !node || view.state !== stateRef.current) return false;
+		const box = measureElement(node);
+		const x = e.x - box.x;
+		const y = e.y - box.y;
+		if (x < 0 || y < 0 || x >= box.width || y >= box.height) return false;
+		let next: PromptState;
+		if (y === 0) {
+			next = clickCursor(view.state, indexAtCell(view.win, view.length, view.cursor, x - view.promptWidth));
+		} else {
+			const row = view.rows[y - 1];
+			if (row?.kind !== 'item' || row.item === undefined) return false;
+			next = clickHint(view.state, row.item, env);
+			if (next === view.state) return false;
+		}
+		stateRef.current = next;
+		setState(next);
+		return true;
+	};
+	const onMouseRef = useRef(onMouse);
+	onMouseRef.current = onMouse;
+
+	useEffect(() => {
+		if (!mouseRef) return;
+		const handler = (e: MouseInputEvent) => onMouseRef.current(e);
+		mouseRef.current = handler;
+		return () => {
+			if (mouseRef.current === handler) mouseRef.current = null;
+		};
+	}, [mouseRef]);
+
 	return (
-		<Box flexDirection="column">
+		<Box ref={rootRef} flexDirection="column">
 			<Text wrap="truncate-end">
 				<Text color={c('cyan')} dimColor={!active}>
 					{prompt}

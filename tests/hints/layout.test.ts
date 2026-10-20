@@ -167,3 +167,26 @@ test('a usage-only result without items renders only the usage row at small heig
 	}
 	assert.deepEqual(layoutHints(h, {sel: 0}, {columns: 80, rows: 2}), []);
 });
+
+const items = (rows: HintRow[]) => rows.map(r => r.item);
+
+test('item rows carry their index in h.items, other rows none', () => {
+	const rows = layoutHints(many(3), {sel: 0}, {columns: 80, rows: 24});
+	assert.deepEqual(items(rows), [undefined, 0, 1, 2]);
+});
+
+test('the item index follows the +N more window', () => {
+	const rows = layoutHints(many(20), {sel: 12}, {columns: 80, rows: 24});
+	assert.deepEqual(kinds(rows), ['usage', 'item', 'item', 'item', 'item', 'item', 'footer']);
+	assert.deepEqual(items(rows), [undefined, 10, 11, 12, 13, 14, undefined]);
+	for (const r of rows.filter(r => r.kind === 'item')) {
+		assert.ok(text(r).includes(`cmd${r.item}`));
+		assert.equal(r.selected, r.item === 12);
+	}
+	const end = layoutHints(many(20), {sel: 19}, {columns: 80, rows: 24});
+	assert.deepEqual(items(end), [undefined, 15, 16, 17, 18, 19, undefined]);
+});
+
+test('a single available row carries the selected index', () => {
+	assert.deepEqual(items(layoutHints(many(5), {sel: 3}, {columns: 80, rows: 3})), [3]);
+});

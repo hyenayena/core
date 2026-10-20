@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {
+	clickCursor,
+	clickHint,
 	ghostText,
 	initialState,
 	sanitizeInsert,
@@ -388,4 +390,96 @@ test('usage-only: Esc dismisses the usage row', () => {
 	assert.equal(r.state.value, 'claude ask ');
 	assert.equal(visibleHints(r.state, r.env), undefined);
 	assert.equal(visibleHints(run([...typed('claude ask '), key('leftArrow')]).state, r.env), undefined);
+});
+
+const left = key('leftArrow');
+
+test('clickCursor moves to a grapheme index in code units and clamps', () => {
+	const s: PromptState = {...initialState, value: 'a\u{1F600}b', cursor: 4};
+	assert.equal(clickCursor(s, 0).cursor, 0);
+	assert.equal(clickCursor(s, 1).cursor, 1);
+	assert.equal(clickCursor(s, 2).cursor, 3);
+	assert.equal(clickCursor(s, 3).cursor, 4);
+	assert.equal(clickCursor(s, 99).cursor, 4);
+	assert.equal(clickCursor(s, -5).cursor, 0);
+	assert.equal(clickCursor(s, Number.NaN).cursor, 0);
+	assert.equal(clickCursor(s, 1).value, 'a\u{1F600}b');
+});
+
+test('clickCursor resets the selection like a cursor key and keeps history', () => {
+	const r = run([...typed('e'), down]);
+	assert.equal(r.state.navigated, true);
+	const c = clickCursor(r.state, 0);
+	assert.equal(c.sel, 0);
+	assert.equal(c.navigated, false);
+	assert.deepEqual(c, step(r.state, left, r.env).state);
+	const h = run([key('upArrow')], ['echo hi']);
+	assert.equal(h.state.historyIndex, 0);
+	const hc = clickCursor(h.state, 2);
+	assert.equal(hc.historyIndex, 0);
+	assert.equal(hc.value, 'echo hi');
+	assert.equal(hc.cursor, 2);
+});
+
+test('clickCursor during a Tab cycle keeps the value and ends the cycle', () => {
+	const r = run([...typed('mod '), tab, tab]);
+	assert.ok(r.state.cycle);
+	const c = clickCursor(r.state, 1);
+	assert.equal(c.value, 'mod update ');
+	assert.equal(c.cursor, 1);
+	assert.equal(c.cycle, undefined);
+});
+
+test('clickHint accepts the item like Enter after navigation', () => {
+	const r = run(typed('ec'));
+	const h = visibleHints(r.state, r.env)!;
+	const i = h.items.findIndex(x => x.insert === 'echo');
+	assert.ok(i >= 0);
+	const c = clickHint(r.state, i, r.env);
+	assert.equal(c.value, 'echo ');
+	assert.equal(c.cursor, 5);
+	assert.equal(c.cycle, undefined);
+	const downs = i === 0 ? h.items.length : i;
+	const nav = run([...typed('ec'), ...Array.from({length: downs}, () => down), enter]);
+	assert.equal(nav.last.effect, undefined);
+	assert.deepEqual(c, nav.state);
+});
+
+test('clickHint during a Tab cycle accepts the clicked item and ends the cycle', () => {
+	const r = run([...typed('mod '), tab, tab]);
+	assert.equal(r.state.value, 'mod update ');
+	const c = clickHint(r.state, 2, r.env);
+	assert.equal(c.value, 'mod remove ');
+	assert.equal(c.cursor, c.value.length);
+	assert.equal(c.cycle, undefined);
+	const first = clickHint(r.state, 0, r.env);
+	assert.equal(first.value, 'mod install ');
+});
+
+test('clickHint changes nothing out of range, after dismissal or on usage only', () => {
+	const r = run(typed('ec'));
+	const n = visibleHints(r.state, r.env)!.items.length;
+	for (const i of [-1, n, 99, 0.5, Number.NaN]) assert.equal(clickHint(r.state, i, r.env), r.state);
+	const d = run([...typed('ec'), esc]);
+	assert.equal(d.state.dismissed, true);
+	assert.equal(clickHint(d.state, 0, d.env), d.state);
+	const u = run(typed('echo '));
+	const v = visibleHints(u.state, u.env);
+	assert.ok(v && v.items.length === 0 && v.usage);
+	assert.equal(clickHint(u.state, 0, u.env), u.state);
+	assert.equal(clickHint(initialState, 0, r.env), initialState);
+});
+
+test('clickCursor and clickHint are total', () => {
+	const bad = {value: 5, cursor: 'x'} as unknown as PromptState;
+	assert.doesNotThrow(() => clickCursor(bad, 1));
+	assert.doesNotThrow(() => clickHint(bad, 0, env()));
+	const throwing = {
+		history: [],
+		hints: () => {
+			throw new Error('boom');
+		},
+	};
+	const s = run(typed('ec')).state;
+	assert.equal(clickHint(s, 0, throwing), s);
 });

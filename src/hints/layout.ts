@@ -14,6 +14,8 @@ export type Segment = {
 export type HintRow = {
 	kind: 'item' | 'usage' | 'footer';
 	selected?: boolean;
+	// Index in `h.items`, set on item rows
+	item?: number;
 	segments: Segment[];
 };
 
@@ -180,7 +182,7 @@ function layout(h: HintResult, ui: HintUi, size: {columns: number; rows: number}
 	const widest = Math.max(...visible.map(i => stringCells(i.label)));
 	const nameWidth = Math.min(widest, Math.floor(columns / 2));
 	visible.forEach((item, i) => {
-		out.push(itemRow(item, start + i === sel, nameWidth, columns, color));
+		out.push({...itemRow(item, start + i === sel, nameWidth, columns, color), item: start + i});
 	});
 	if (footer > 0) {
 		out.push({kind: 'footer', segments: clip([{text: `${BLANK_MARKER}+${footer} more`, dim: true}], columns - 1)});

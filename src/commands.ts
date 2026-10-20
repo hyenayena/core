@@ -30,6 +30,17 @@ function appearanceTab(): SettingsTab {
 				get: () => (getPrefs().colors ? 'on' : 'off'),
 				set: value => setPrefs({colors: value !== 'off'}),
 			},
+			{
+				key: 'mouse',
+				label: 'Mouse',
+				description: 'Wheel scrolls, click focuses and moves the cursor. Hold Shift (Option in iTerm2, Fn in macOS Terminal) to select text',
+				options: [
+					{value: 'on', label: 'On'},
+					{value: 'off', label: 'Off'},
+				],
+				get: () => (getPrefs().mouse ? 'on' : 'off'),
+				set: value => setPrefs({mouse: value !== 'off'}),
+			},
 		],
 	};
 }

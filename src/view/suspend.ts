@@ -17,11 +17,17 @@ type Out = {write(s: string): unknown; emit(event: 'resize'): unknown};
  * screen is shown, and afterwards the app's screen is redrawn. `fn` should block (spawnSync) so that
  * nothing renders over the child program.
  */
-export async function suspendTerminal<T>(stdin: In, stdout: Out, fn: () => T | Promise<T>): Promise<T> {
+export async function suspendTerminal<T>(
+	stdin: In,
+	stdout: Out,
+	fn: () => T | Promise<T>,
+	mouse?: {pause(): void; resume(): void},
+): Promise<T> {
 	const readers = stdin.listeners('readable');
 	for (const r of readers) stdin.removeListener('readable', r);
 	const wasRaw = stdin.isRaw === true;
 	stdin.setRawMode?.(false);
+	mouse?.pause();
 	stdout.write(LEAVE);
 	try {
 		return await fn();
@@ -29,6 +35,7 @@ export async function suspendTerminal<T>(stdin: In, stdout: Out, fn: () => T | P
 		stdin.setRawMode?.(wasRaw);
 		for (const r of readers) stdin.on('readable', r);
 		stdout.write(RETURN);
+		mouse?.resume();
 		// Ink repaints the whole frame on resize.
 		stdout.emit('resize');
 	}
