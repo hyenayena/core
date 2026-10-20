@@ -13,9 +13,9 @@ Command REPL for yena (Ink). Commands receive a `CommandContext` (see `src/api.t
 - Console commands print into the panel (last 500 lines kept, the visible tail shown) while a main view is shown, into the scrollback otherwise. A command that mounted the main view prints into the scrollback from then on.
 - Vim-style `:q` (or `:q!`) as a whole console line closes the side console; when the console is the whole screen it exits the app. A main view can exit the app with `host.quit()` (the claude chat does it on `:q`).
 - Mounting a main view clears the transcript (except the welcome line), so a new chat does not show the previous one; a view that resumes a conversation prints its history itself.
-- `ctx.suspend(fn)` hands the terminal to a blocking child (an editor, an interactive login): key reading and raw mode are detached, the alternate screen is left, and afterwards the screen is entered again and repainted (`src/view/suspend.ts`). `fn` should use `spawnSync`, so nothing renders over the child.
+- `ctx.suspend(fn)` hands the terminal to a blocking child (an editor, an interactive login): key reading and raw mode are detached, the alternate screen is left, and afterwards the screen is entered again and repainted (`src/view/suspend.ts`); mouse reporting is off meanwhile. `fn` should use `spawnSync`, so nothing renders over the child.
 - `ctx.copyToClipboard(text)` writes OSC 52 (base64, so the text cannot carry escapes; at most 50 000 characters; `src/view/clipboard.ts`).
-- The `settings` command contributes an `Appearance` tab: title bar colour (Olive, Blue, Teal, Gray, Inverse) and colours on/off, saved to `<core data dir>/appearance.json` (`src/view/prefs.ts`); `NO_COLOR` still wins.
+- The `settings` command contributes an `Appearance` tab: title bar colour (Olive, Blue, Teal, Gray, Inverse), colours on/off and Mouse on/off (see Mouse), saved to `<core data dir>/appearance.json` (`src/view/prefs.ts`); `NO_COLOR` still wins.
 - A main view may call `host.setTitle(title, detail?)`: a one-row olive bar (#808000, black text; inverse with `NO_COLOR`) above the transcript shows the title on the left (bold, shortened first) and the detail right-aligned (`components/TitleBar.tsx`); both are sanitised; it disappears when the view closes or the title is undefined.
 - The hint catalog is rebuilt when the console opens and after every command finishes, so a plugin may change its `subcommands` at runtime (the claude module lists Claude Code commands this way).
 - Commands with `autostart: true` run once at startup with no arguments (their output goes to the scrollback); the welcome line then mentions Esc Esc.
@@ -34,6 +34,25 @@ Shows an Ink view in `options.target`: `main` (default) or `panel` (in place of 
 - A view flushes completed output through `control.print` / `ctx.print` into the transcript and must not render its own `<Static>`.
 - `main.tsx` renders with `exitOnCtrlC: false`: at the prompt Ctrl+C exits; inside a view the view receives it. A view that ignores Ctrl+C cannot be interrupted (raw mode); `MountBoundary` only catches render errors.
 - Every `.tsx` file imports React explicitly: the host runs tsx from its own root, where the module's JSX settings do not apply.
+
+## Transcript scrolling
+
+The main transcript scrolls by screen rows, not by printed lines: `src/transcript/wrap.ts` wraps every line to the transcript width (colours carried across rows), `src/transcript/scroll.ts` anchors the position to the line at the bottom, so new output, trimming and resizing keep what you read in place. The wheel and Shift+↑/↓ move one row, PgUp/PgDn a page; `↓ N newer lines` counts rows.
+
+## Mouse
+
+`src/mouse/`: `sgr.ts` (tokenizer for mouse reports), `input.ts` (stdin proxy handed to Ink as `stdin`), `terminal.ts` (turns reporting on and off: `ESC[?1000h` + `ESC[?1006h`), `hit.ts` (areas, wheel step), `view-mouse.ts` (the type views get).
+
+- The `Mouse` setting (Appearance tab, default On, key `mouse` in `appearance.json`) switches it live. Off: no reporting, no events.
+- The wheel scrolls the area under the pointer by 1 screen row per event (`WHEEL_ROWS`): the main transcript, or the console panel's output (with a `↓ N newer lines` row while scrolled up). A view under the pointer gets the wheel first (see below); a panel view that does not handle it is not scrolled.
+- A left click focuses the main view or the panel in the split layout. A click on the console prompt line moves the cursor; a click on a hint item accepts it like Tab (it never runs the line). A prompt click is ignored while keys are still pending render.
+- With Mouse on, the terminal's own text selection needs Shift (Option in iTerm2, Fn in macOS Terminal).
+- While Mouse is on, a lone Esc is delivered after up to 10 ms and a trailing `ESC[` after up to 50 ms, in case a report follows. SGR reports are always consumed; X10 reports only while Mouse is on (they look like text); a malformed report is discarded through its final byte; bracketed paste passes through untouched.
+- Reporting is turned off on exit (`process.once('exit')`), on unmount and during `ctx.suspend`. After a SIGKILL the terminal keeps reporting: run `reset`.
+
+For module authors: the `ViewHost` core passes to a mounted view carries an optional `subscribeMouse(listener)` at runtime (type in `src/mouse/view-mouse.ts`; not part of the host contract, so feature-detect it and copy the type by structure). Events go only to the view under the pointer, with `x`/`y` relative to the view box plus its `width`/`height`; returning `true` means handled, anything else (a throw included) falls back to core's default. The wheel arrives even when the view is unfocused; a left press focuses the area first. At most 8 listeners per view; nothing is delivered while the setting is off.
+
+Residual risks: verified only with fake TTY streams; SIGKILL leaves mouse mode on; terminals limited to X10 encoding lose clicks at coordinates >= 95.
 
 ## Logging
 `App` takes an optional `log` prop (`Logger` from the host `src/api.ts`); `main.tsx` passes `yena.log` (scope `core`). Without it `src/noop-log.ts` is used and nothing is written. Records:
@@ -82,4 +101,4 @@ Manual TTY check:
 
 ## Tests
 
-`npm test` (`node --import tsx --test "tests/**/*.test.ts" "tests/**/*.test.tsx"`) runs unit tests per `src/hints/` module (`tests/hints/*.test.ts`, shared commands in `tests/hints/fixture.ts`) and drives the real `App` through fake TTY streams: `mountHarness(element, size?, {debug?})` in `tests/testkit.ts` returns `press`, `settle`, `lastFrame`, `allOutput`, `frameCount`, `resize(columns, rows)`, `unmount`, `raw` (raw-mode log); `fakeLogger` records log calls. `tests/mount.test.tsx`, `tests/log.test.tsx` and `tests/hints/*.test.tsx` use it. `npm run typecheck` runs `tsc -p . && tsc -p tests`.
+`npm test` (`node --import tsx --test "tests/**/*.test.ts" "tests/**/*.test.tsx"`) runs unit tests per `src/hints/` module (`tests/hints/*.test.ts`, shared commands in `tests/hints/fixture.ts`) and drives the real `App` through fake TTY streams: `mountHarness(element, size?, {debug?, tty?, stdin?, stdout?})` in `tests/testkit.ts` (`tty` receives the presses, `stdin` is what Ink reads, e.g. an input proxy over `tty`; `createFakeTty()` / `createFakeStdout(size?)` build them) returns `press`, `settle`, `lastFrame`, `allOutput`, `frameCount`, `resize(columns, rows)`, `unmount`, `raw` (raw-mode log); `fakeLogger` records log calls. `tests/mount.test.tsx`, `tests/log.test.tsx`, `tests/mouse/*.test.tsx` and `tests/hints/*.test.tsx` use it; `tests/mouse/*.test.ts` unit-test the mouse layer. `npm run typecheck` runs `tsc -p . && tsc -p tests`.

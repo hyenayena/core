@@ -200,3 +200,30 @@ test('a throwing size callback drops the events but keeps the text', async () =>
 	assert.equal(received.join(''), 'ab');
 	assert.equal(events.length, 0);
 });
+
+test('a trailing ESC[ is held 50 ms while mouse is on, so a slow split report is still joined', async () => {
+	const s = setup(true);
+	await s.send(`a${ESC}[`);
+	s.clock.advance(20);
+	assert.equal(await s.text(), 'a');
+	await s.send('<0;4;5M');
+	assert.equal(await s.text(), 'a');
+	assert.deepEqual(s.events.map(e => [e.x, e.y]), [[3, 4]]);
+	await s.send(`${ESC}[`);
+	s.clock.advance(49);
+	assert.equal(await s.text(), 'a');
+	s.clock.advance(1);
+	assert.equal(await s.text(), `a${ESC}[`);
+});
+
+test('a malformed report never reaches the text, also when split', async () => {
+	const s = setup(true);
+	await s.send(`x${ESC}[<12345;1`);
+	await s.send(';1My');
+	await s.send(`${ESC}[<0:1:1Mz`);
+	assert.equal(await s.text(), 'xyz');
+	assert.equal(s.events.length, 0);
+	const off = setup(false);
+	await off.send(`x${ESC}[<0;1;12345My`);
+	assert.equal(await off.text(), 'xy');
+});

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {areaAt, inside, toLocal, wheelDelta, type Rect} from '../../src/mouse/hit.js';
+import {WHEEL_ROWS, areaAt, inside, toLocal, wheelDelta, type Rect} from '../../src/mouse/hit.js';
 import type {MouseInputEvent} from '../../src/mouse/sgr.js';
 
 const rect: Rect = {x: 60, y: 0, width: 40, height: 30};
@@ -50,9 +50,10 @@ test('a split layout picks the area under the pointer', () => {
 	assert.equal(areaAt({x: 70, y: 5}, {side: true, panelOpen: true, split: true}), 'main', 'no measured panel');
 });
 
-test('wheelDelta scrolls three lines per notch and ignores other events', () => {
-	assert.equal(wheelDelta(event({kind: 'wheel', button: 'none', wheel: 'up'})), 3);
-	assert.equal(wheelDelta(event({kind: 'wheel', button: 'none', wheel: 'down'})), -3);
+test('wheelDelta scrolls one row per event and ignores other events', () => {
+	assert.equal(WHEEL_ROWS, 1);
+	assert.equal(wheelDelta(event({kind: 'wheel', button: 'none', wheel: 'up'})), 1);
+	assert.equal(wheelDelta(event({kind: 'wheel', button: 'none', wheel: 'down'})), -1);
 	assert.equal(wheelDelta(event({kind: 'wheel', button: 'none'})), 0);
 	assert.equal(wheelDelta(event({})), 0);
 	assert.equal(wheelDelta(event({kind: 'release', button: 'none'})), 0);

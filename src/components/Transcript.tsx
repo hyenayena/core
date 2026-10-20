@@ -1,32 +1,30 @@
-import React from 'react';
-import {Box, Text} from 'ink';
-
-export type TranscriptLine = {id: number; text: string; color?: string};
+import React, {type Ref} from 'react';
+import {Box, Text, type DOMElement} from 'ink';
+import type {VisibleRow} from '../transcript/scroll.js';
 
 export const scrollHint = (newer: number, keys = 'PgDn or Shift+↓') =>
 	`↓ ${newer} newer line${newer === 1 ? '' : 's'}${keys === '' ? '' : ` · ${keys}`}`;
 
 /**
- * The scrollback of the full-screen app. `scroll` counts logical lines hidden below the
- * view; the last lines before them are drawn bottom-up and the overflow is clipped at the top.
+ * The scrollback of the full-screen app, as screen rows already wrapped to its width.
+ * `newer` counts the rows hidden below the view; the overflow is clipped at the top.
  */
-export default function Transcript({lines, scroll, maxRows}: {lines: TranscriptLine[]; scroll: number; maxRows: number}) {
-	const end = Math.max(0, lines.length - scroll);
-	// Every line takes at least one row, so this many always fills the view.
-	const visible = lines.slice(Math.max(0, end - Math.max(1, maxRows)), end);
+export default function Transcript({rows, newer, boxRef}: {rows: VisibleRow[]; newer: number; boxRef?: Ref<DOMElement>}) {
 	return (
 		<>
-			<Box flexDirection="column" flexGrow={1} flexShrink={1} justifyContent="flex-end" overflow="hidden">
-				{visible.map(line => (
-					<Box key={line.id} flexShrink={0}>
-						<Text color={line.color}>{line.text === '' ? ' ' : line.text}</Text>
+			<Box ref={boxRef} flexDirection="column" flexGrow={1} flexShrink={1} justifyContent="flex-end" overflow="hidden">
+				{rows.map(row => (
+					<Box key={row.key} flexShrink={0}>
+						<Text color={row.color} wrap="truncate-end">
+							{row.text === '' ? ' ' : row.text}
+						</Text>
 					</Box>
 				))}
 			</Box>
-			{scroll > 0 && (
+			{newer > 0 && (
 				<Box flexShrink={0}>
 					<Text dimColor wrap="truncate-end">
-						{scrollHint(scroll)}
+						{scrollHint(newer)}
 					</Text>
 				</Box>
 			)}

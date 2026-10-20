@@ -4,7 +4,7 @@ export type Rect = {x: number; y: number; width: number; height: number};
 export type Area = 'main' | 'panel';
 export type AreaLayout = {side: boolean; panelOpen: boolean; split: boolean; panelRect?: Rect | undefined};
 
-export const WHEEL_LINES = 3;
+export const WHEEL_ROWS = 1;
 
 export const inside = (rect: Rect, x: number, y: number): boolean =>
 	x >= rect.x && x < rect.x + rect.width && y >= rect.y && y < rect.y + rect.height;
@@ -19,8 +19,8 @@ export function areaAt(point: {x: number; y: number}, layout: AreaLayout): Area 
 	return layout.panelRect && inside(layout.panelRect, point.x, point.y) ? 'panel' : 'main';
 }
 
-/** Lines to scroll back (positive) or forward (negative) for a wheel event, 0 for anything else. */
+/** Rows to scroll back (positive) or forward (negative) for a wheel event, 0 for anything else. */
 export function wheelDelta(e: MouseInputEvent): number {
 	if (e.kind !== 'wheel') return 0;
-	return e.wheel === 'up' ? WHEEL_LINES : e.wheel === 'down' ? -WHEEL_LINES : 0;
+	return e.wheel === 'up' ? WHEEL_ROWS : e.wheel === 'down' ? -WHEEL_ROWS : 0;
 }

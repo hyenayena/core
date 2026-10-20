@@ -27,6 +27,7 @@ import {getPrefs, subscribePrefs} from './view/prefs.js';
 import {areaAt, inside, toLocal, wheelDelta, type Rect} from './mouse/hit.js';
 import type {MouseInputEvent} from './mouse/sgr.js';
 import type {ViewMouseEvent, ViewMouseHost} from './mouse/view-mouse.js';
+import {createRowCache, normalizeAnchor, sameAnchor, scrollAnchor, visibleWindow, type Anchor} from './transcript/scroll.js';
 
 type Line = {id: number; text: string; color?: string; welcome?: boolean};
 
@@ -261,26 +262,44 @@ export default function App({registry, log = noopLog, mouse}: {registry: Registr
 		[],
 	);
 
-	const [scroll, setScroll] = useState(0);
-	const scrollRef = useRef(0);
-	scrollRef.current = scroll;
+	const [anchor, setAnchor] = useState<Anchor | null>(null);
+	const rowCache = useRef(createRowCache()).current;
 	const linesRef = useRef(lines);
 	linesRef.current = lines;
+	// While the console covers the chat its width is 0; keep wrapping at the last real width.
+	const widthRef = useRef(Math.max(1, columns));
+	const shownWidth = side ? geo.mainColumns : columns;
+	if (shownWidth > 0) widthRef.current = shownWidth;
+	const width = widthRef.current;
+	const transcriptBoxRef = useRef<DOMElement>(null);
+	const viewportHeight = () => {
+		const height = transcriptBoxRef.current ? measureElement(transcriptBoxRef.current).height : 0;
+		return height > 0 ? height : Math.max(1, rows - 6);
+	};
+	const hintShown = useRef(false);
+	// A scrolled view always shows the hint, so its top is clamped with the hint row taken.
+	const anchoredViewport = () => Math.max(1, viewportHeight() - (hintShown.current ? 0 : 1));
 	const printMain = (text: string, color?: string) => {
 		setLines(prev => [...prev, {id: nextId++, text, color}].slice(-MAX_LINES));
-		// Keep a scrolled-up view on the same lines while new output arrives below.
-		if (scrollRef.current > 0) setScroll(s => Math.min(s + 1, MAX_LINES - 1));
 	};
-	const scrollBy = (delta: number) =>
-		setScroll(s => Math.max(0, Math.min(Math.max(0, linesRef.current.length - 1), s + delta)));
+	const scrollBy = (delta: number) => {
+		const viewport = anchoredViewport();
+		setAnchor(a => scrollAnchor(linesRef.current, a, delta, rowCache, widthRef.current, viewport));
+	};
+	useEffect(() => {
+		const next = normalizeAnchor(lines, anchor, rowCache, width, anchoredViewport());
+		if (!sameAnchor(next, anchor)) setAnchor(next);
+	}, [lines, width, anchor, rows, main]);
 	const [panelScroll, setPanelScroll] = useState(0);
 	const panelScrollRef = useRef(0);
 	panelScrollRef.current = panelScroll;
 	const panelLinesRef = useRef(panelLines);
 	panelLinesRef.current = panelLines;
 	const printPanel = (text: string, color?: string) => {
-		setPanelLines(prev => [...prev, {id: nextId++, text, color}].slice(-MAX_PANEL_LINES));
-		if (panelScrollRef.current > 0) setPanelScroll(s => Math.min(s + 1, MAX_PANEL_LINES - 1));
+		// One panel line per row, so the panel scroll can keep counting lines.
+		const parts = text.split(/\r?\n/);
+		setPanelLines(prev => [...prev, ...parts.map(part => ({id: nextId++, text: part, color}))].slice(-MAX_PANEL_LINES));
+		if (panelScrollRef.current > 0) setPanelScroll(s => Math.min(s + parts.length, MAX_PANEL_LINES - 1));
 	};
 	const panelScrollBy = (delta: number) =>
 		setPanelScroll(s =>
@@ -321,7 +340,7 @@ export default function App({registry, log = noopLog, mouse}: {registry: Registr
 					onMain();
 					// A new main view (a new chat) starts on a clean transcript; the welcome hint stays.
 					setLines(prev => prev.filter(l => l.welcome));
-					setScroll(0);
+					setAnchor(null);
 					setMain({id, element});
 					setFocus('main');
 				} else {
@@ -339,7 +358,7 @@ export default function App({registry, log = noopLog, mouse}: {registry: Registr
 			clear: () => {
 				setLines([]);
 				setPanelLines([]);
-				setScroll(0);
+				setAnchor(null);
 				setPanelScroll(0);
 			},
 			exit,
@@ -402,7 +421,7 @@ export default function App({registry, log = noopLog, mouse}: {registry: Registr
 		if (!isConsoleToggle(input, key)) {
 			// The transcript scrolls unless the side console has the input.
 			if (side && active === 'panel') return;
-			const page = Math.max(1, rows - 6);
+			const page = Math.max(1, viewportHeight() - 1);
 			if (key.pageUp) scrollBy(page);
 			else if (key.pageDown) scrollBy(-page);
 			else if (key.shift && key.upArrow) scrollBy(1);
@@ -414,7 +433,6 @@ export default function App({registry, log = noopLog, mouse}: {registry: Registr
 
 	const panelRef = useRef<DOMElement>(null);
 	const promptMouse = useRef<((e: MouseInputEvent) => boolean) | null>(null);
-	// Views never receive mouse events: a click on one only moves the focus to its area.
 	const mainViewRef = useRef<DOMElement>(null);
 	const consoleBodyRef = useRef<DOMElement>(null);
 	// The first listener returning exactly true consumes the event.
@@ -547,7 +565,9 @@ export default function App({registry, log = noopLog, mouse}: {registry: Registr
 		);
 	};
 
-	const transcript = <Transcript lines={lines} scroll={scroll} maxRows={rows} />;
+	const view = visibleWindow(lines, anchor, rowCache, width, rows);
+	hintShown.current = view.newer > 0;
+	const transcript = <Transcript rows={view.rows} newer={view.newer} boxRef={transcriptBoxRef} />;
 
 	return (
 		<Box flexDirection="column" width={columns} height={rows}>

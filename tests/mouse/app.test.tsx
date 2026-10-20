@@ -89,9 +89,9 @@ test('the wheel over the main transcript scrolls it and back', async () => {
 	await fillMain();
 	assert.doesNotMatch(h.lastFrame(), /newer line/);
 	await send(wheelUp(10, 5));
-	assert.match(h.lastFrame(), /↓ 3 newer lines · PgDn or Shift\+↓/);
-	assert.match(h.lastFrame(), /line-56/);
-	assert.doesNotMatch(h.lastFrame(), /line-57/);
+	assert.match(h.lastFrame(), /↓ 1 newer line · PgDn or Shift\+↓/);
+	assert.match(h.lastFrame(), /line-58/);
+	assert.doesNotMatch(h.lastFrame(), /line-59/);
 	await send(wheelDown(10, 5));
 	assert.doesNotMatch(h.lastFrame(), /newer line/);
 	assert.match(h.lastFrame(), /line-59/);
@@ -103,7 +103,7 @@ test('the wheel over the main view rows scrolls the transcript too', async () =>
 	await h.settle(60);
 	await fillMain();
 	await send(wheelUp(1, 30));
-	assert.match(h.lastFrame(), /↓ 3 newer lines/);
+	assert.match(h.lastFrame(), /↓ 1 newer line/);
 	assert.match(h.lastFrame(), /CHAT\[\] focused/, 'the view receives nothing');
 	h.unmount();
 });
@@ -118,7 +118,7 @@ test('the wheel over the panel scrolls the panel output only', async () => {
 	assert.match(h.lastFrame(), /row-59/);
 	await send(wheelUp(80, 10));
 	let frame = h.lastFrame();
-	assert.match(frame, /↓ 3 newer lines/);
+	assert.match(frame, /↓ 1 newer line/);
 	assert.doesNotMatch(frame, /PgDn/, 'the panel hint has no keys, the transcript did not scroll');
 	assert.doesNotMatch(frame, /row-59/);
 	assert.match(frame, /row-56/);
@@ -140,7 +140,7 @@ test('a scrolled panel stays on its lines while output arrives', async () => {
 	await send('\r', 120);
 	const frame = h.lastFrame();
 	assert.doesNotMatch(frame, /row-59/);
-	assert.match(frame, /newer lines/);
+	assert.match(frame, /newer line/);
 	h.unmount();
 });
 
@@ -170,7 +170,7 @@ test('a narrow screen sends everything to the console', async () => {
 	await send('zz');
 	assert.match(h.lastFrame(), /> zz/, 'the click kept the console focused');
 	await send(wheelUp(5, 5));
-	assert.match(h.lastFrame(), /↓ 3 newer lines/);
+	assert.match(h.lastFrame(), /↓ 1 newer line/);
 	assert.doesNotMatch(h.lastFrame(), /PgDn/);
 	h.unmount();
 });
@@ -181,7 +181,7 @@ test('without a main view the wheel scrolls the transcript', async () => {
 	await send('many');
 	await send('\r', 120);
 	await send(wheelUp(10, 5));
-	assert.match(h.lastFrame(), /↓ 3 newer lines · PgDn/);
+	assert.match(h.lastFrame(), /↓ 1 newer line · PgDn/);
 	h.unmount();
 });
 
@@ -200,7 +200,7 @@ test('the Mouse preference off writes no mode switch and ignores the wheel; it a
 		await h.settle(60);
 		assert.ok(h.allOutput().includes(MOUSE_ENABLE));
 		await send(wheelUp(10, 5));
-		assert.match(h.lastFrame(), /↓ 3 newer lines/);
+		assert.match(h.lastFrame(), /↓ 1 newer line/);
 		setPrefs({mouse: false});
 		await h.settle(60);
 		assert.ok(h.allOutput().lastIndexOf(MOUSE_DISABLE) > h.allOutput().lastIndexOf(MOUSE_ENABLE));
@@ -315,7 +315,7 @@ for (const [label, handler] of [
 		await fillMain();
 		await send(wheelUp(5, 29));
 		assert.equal(seen.length, 1);
-		assert.match(h.lastFrame(), /↓ 3 newer lines/);
+		assert.match(h.lastFrame(), /↓ 1 newer line/);
 		h.unmount();
 	});
 }

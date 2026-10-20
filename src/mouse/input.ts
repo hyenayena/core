@@ -98,7 +98,7 @@ export function createInputProxy(
 				if (event) dispatch(event);
 			}
 		}
-		if (result.hold === 'short' && !enabled) {
+		if (result.flushable && !enabled) {
 			release();
 		} else if (result.hold !== 'none') {
 			schedule(result.hold === 'short' ? SHORT_HOLD_MS : LONG_HOLD_MS);

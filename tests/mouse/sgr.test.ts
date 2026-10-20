@@ -93,9 +93,12 @@ test('a report split at every pair of boundaries across 3 chunks is joined', () 
 	}
 });
 
-test('hold reports a trailing ESC or ESC[ as short and a partial report as long', () => {
+test('hold reports a lone trailing ESC as short, a trailing ESC[ and a partial report as long', () => {
 	assert.equal(feed([`a${ESC}`]).hold, 'short');
-	assert.equal(feed([`a${ESC}[`]).hold, 'short');
+	assert.equal(feed([`a${ESC}[`]).hold, 'long');
+	assert.equal(createMouseTokenizer().push(`a${ESC}`).flushable, true);
+	assert.equal(createMouseTokenizer().push(`a${ESC}[`).flushable, true);
+	assert.equal(createMouseTokenizer().push(`a${ESC}[<0`).flushable, false);
 	assert.equal(feed([`a${ESC}[<`]).hold, 'long');
 	assert.equal(feed([`a${ESC}[<0;1`]).hold, 'long');
 	assert.equal(feed([`${ESC}[M`], {x10: true}).hold, 'long');
@@ -116,20 +119,28 @@ test('flush returns a held ESC or ESC[ as text and drops a partial report', () =
 	const tok = createMouseTokenizer();
 	tok.push(`${ESC}[<0;1`);
 	assert.equal(tok.flush(), '');
-	assert.deepEqual(tok.push(';1M'), {text: ';1M', events: [], hold: 'none'});
+	assert.deepEqual(tok.push(';1M'), {text: ';1M', events: [], hold: 'none', flushable: false});
 	assert.equal(tok.flush(), '');
 });
 
-test('malformed reports are dropped and parsing resumes at the offending character', () => {
-	const letters = feed([`${ESC}[<0;1;aM`]);
-	assert.equal(letters.text, 'aM');
-	assert.equal(letters.events.length, 0);
-	assert.equal(feed([`${ESC}[<12345;1;1M`]).text, '5;1;1M');
-	assert.equal(feed([`${ESC}[<0;1M`]).text, 'M');
-	assert.equal(feed([`${ESC}[<0;;1M`]).text, ';1M');
-	assert.equal(feed([`${ESC}[<;1;1M`]).text, ';1;1M');
-	assert.equal(feed([`${ESC}[<0;1;1;1M`]).text, ';1M');
-	assert.equal(feed([`${ESC}[<0;1;1X`]).text, 'X');
+test('malformed reports are swallowed up to their final byte, an ESC or control starts over', () => {
+	for (const bad of ['12345;1;1M', '0;1;12345M', '0;1;1;M', ';1;1M', '0;1M', '0:1:1M', '0;1;1X', '0;;1M', '0;1;1;1M']) {
+		const r = feed([`a${ESC}[<${bad}b`]);
+		assert.equal(r.text, 'ab', bad);
+		assert.equal(r.events.length, 0, bad);
+		assert.equal(r.hold, 'none', bad);
+	}
+	assert.equal(feed([`${ESC}[<0;1;aM`]).text, 'M');
+	const control = feed([`${ESC}[<0;1:\r`]);
+	assert.equal(control.text, '\r');
+	assert.equal(feed([`${ESC}[<0;1:é`]).text, 'é');
+	const long = feed([`${ESC}[<0;${';'.repeat(100)}Mz`]);
+	assert.equal(long.text, 'z');
+	const split = feed([`${ESC}[<12345;`, '1;1', 'Mz']);
+	assert.equal(split.text, 'z');
+	const held = feed([`${ESC}[<12345;`]);
+	assert.equal(held.hold, 'long');
+	assert.equal(held.flush(), '');
 	const nested = feed([`${ESC}[<0;1${sgr(0, 2, 3)}z`]);
 	assert.equal(nested.text, 'z');
 	assert.deepEqual(nested.events, [{code: 0, x: 2, y: 3, release: false}]);
@@ -141,7 +152,9 @@ test('malformed reports are dropped and parsing resumes at the offending charact
 test('the longest valid report is accepted, overlong runs are cut', () => {
 	const r = feed([sgr(9999, 9999, 9999)]);
 	assert.deepEqual(r.events, [{code: 9999, x: 9999, y: 9999, release: false}]);
-	assert.equal(feed([`${ESC}[<00000`]).text, '0');
+	assert.equal(feed([`${ESC}[<00000`]).text, '');
+	assert.equal(feed([`${ESC}[<00000`]).hold, 'long');
+	assert.equal(feed([`${ESC}[<00000;1;1Mz`]).text, 'z');
 });
 
 test('X10 reports are consumed only while enabled', () => {

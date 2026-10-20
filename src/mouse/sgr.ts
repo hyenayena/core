@@ -12,7 +12,8 @@ export type MouseInputEvent = {
 // x and y are the terminal's 1-based cells; `release` is the SGR `m` final.
 export type RawMouse = {code: number; x: number; y: number; release: boolean};
 
-export type TokenizerResult = {text: string; events: RawMouse[]; hold: 'none' | 'short' | 'long'};
+// `flushable`: the held part (a lone ESC or `ESC[`) comes back as text from `flush`; anything else held is dropped.
+export type TokenizerResult = {text: string; events: RawMouse[]; hold: 'none' | 'short' | 'long'; flushable: boolean};
 
 export type MouseTokenizer = {
 	push(chunk: string): TokenizerResult;
@@ -31,17 +32,19 @@ type Pending =
 	| {kind: 'esc'}
 	| {kind: 'csi'}
 	| {kind: 'sgr'; fields: number[]; digits: number}
-	| {kind: 'x10'; values: number[]};
+	| {kind: 'x10'; values: number[]}
+	| {kind: 'discard'};
 
 const isDigit = (ch: string) => ch >= '0' && ch <= '9';
+const code = (ch: string) => ch.codePointAt(0)!;
 
 export function createMouseTokenizer(): MouseTokenizer {
 	let x10 = false;
 	let inPaste = false;
 	// Progress through PASTE_START (outside a paste) or PASTE_END (inside one) over the text emitted so far.
 	let marker = 0;
-	let pending: Pending | undefined;
-	let pendingText = '';
+	let state: Pending | undefined;
+	let seq = '';
 
 	const track = (out: string[], ch: string) => {
 		out.push(ch);
@@ -61,20 +64,25 @@ export function createMouseTokenizer(): MouseTokenizer {
 		for (const ch of text) track(out, ch);
 	};
 
+	const reset = () => {
+		state = undefined;
+		seq = '';
+	};
+
+	// A broken report is swallowed up to its final byte so that no part of it reaches text input.
+	const discard = () => {
+		state = {kind: 'discard'};
+		seq = '';
+	};
+
 	const push = (chunk: string): TokenizerResult => {
-		const input = pendingText + chunk;
-		pending = undefined;
-		pendingText = '';
 		const out: string[] = [];
 		const events: RawMouse[] = [];
-		const chars = Array.from(input);
-		let seq = '';
-		let state: Pending | undefined;
+		const chars = Array.from(chunk);
 
 		const complete = (raw: RawMouse) => {
 			if (events.length < MAX_EVENTS) events.push(raw);
-			state = undefined;
-			seq = '';
+			reset();
 		};
 
 		let i = 0;
@@ -90,9 +98,8 @@ export function createMouseTokenizer(): MouseTokenizer {
 				i++;
 				continue;
 			}
-			if (seq.length + ch.length > MAX_SEQUENCE) {
-				state = undefined;
-				seq = '';
+			if (state.kind !== 'discard' && seq.length + ch.length > MAX_SEQUENCE) {
+				discard();
 				continue;
 			}
 			switch (state.kind) {
@@ -104,8 +111,7 @@ export function createMouseTokenizer(): MouseTokenizer {
 					} else {
 						// Not a CSI (Alt+key, a lone Esc): the ESC is ordinary input, the character is parsed again.
 						emit(out, seq);
-						state = undefined;
-						seq = '';
+						reset();
 					}
 					break;
 				case 'csi':
@@ -119,8 +125,7 @@ export function createMouseTokenizer(): MouseTokenizer {
 						i++;
 					} else {
 						emit(out, seq);
-						state = undefined;
-						seq = '';
+						reset();
 					}
 					break;
 				case 'sgr': {
@@ -139,15 +144,26 @@ export function createMouseTokenizer(): MouseTokenizer {
 						i++;
 						complete({code: s.fields[0]!, x: s.fields[1]!, y: s.fields[2]!, release: ch === 'm'});
 					} else {
-						// Malformed: what was consumed is dropped and the offending character is parsed again.
-						state = undefined;
-						seq = '';
+						discard();
+					}
+					break;
+				}
+				case 'discard': {
+					const c = code(ch);
+					if (c >= 0x20 && c <= 0x3f) {
+						i++;
+					} else if (c >= 0x40 && c <= 0x7e) {
+						i++;
+						reset();
+					} else {
+						// ESC, a control or non-ASCII text cannot belong to the report: it is parsed again.
+						reset();
 					}
 					break;
 				}
 				case 'x10': {
 					const s = state;
-					s.values.push(ch.codePointAt(0)!);
+					s.values.push(code(ch));
 					seq += ch;
 					i++;
 					if (s.values.length === 3) {
@@ -158,20 +174,15 @@ export function createMouseTokenizer(): MouseTokenizer {
 			}
 		}
 
-		let hold: TokenizerResult['hold'] = 'none';
-		if (state) {
-			pending = state;
-			pendingText = seq;
-			hold = state.kind === 'esc' || state.kind === 'csi' ? 'short' : 'long';
-		}
-		return {text: out.join(''), events, hold};
+		const held = state;
+		const hold: TokenizerResult['hold'] = !held ? 'none' : held.kind === 'esc' ? 'short' : 'long';
+		return {text: out.join(''), events, hold, flushable: held?.kind === 'esc' || held?.kind === 'csi'};
 	};
 
 	const flush = (): string => {
-		const held = pending;
-		const text = pendingText;
-		pending = undefined;
-		pendingText = '';
+		const held = state;
+		const text = seq;
+		reset();
 		if (!held || (held.kind !== 'esc' && held.kind !== 'csi')) return '';
 		const out: string[] = [];
 		emit(out, text);
