@@ -25,11 +25,17 @@ function activeAfter(start: string[], pieces: Piece[]): string[] {
 	return active;
 }
 
+export type WrapOptions = {
+	// 'word' breaks after spaces and drops the space at a break; 'char' breaks anywhere and keeps every grapheme.
+	mode?: 'word' | 'char';
+};
+
 /**
  * Wraps one logical line to rows of at most `width` cells. SGR sequences take no cells and
  * are replayed at the start of every following row; other escape sequences stay where they are.
  */
-export function wrapRows(text: string, width: number): string[] {
+export function wrapRows(text: string, width: number, options: WrapOptions = {}): string[] {
+	const charMode = options.mode === 'char';
 	if (typeof text !== 'string' || text === '') return [''];
 	const max = Number.isFinite(width) && width >= 1 ? Math.floor(width) : 1;
 	const rows: string[] = [];
@@ -65,6 +71,12 @@ export function wrapRows(text: string, width: number): string[] {
 		if (g === '\r') return;
 		const w = cellWidth(g);
 		const space = g === ' ';
+		if (charMode) {
+			if (cells + w > max && cells > 0) newline();
+			pieces.push({s: g, w, space: false, sgr: false});
+			cells += w;
+			return;
+		}
 		if (cells + w > max) {
 			if (space) {
 				newline();
@@ -93,4 +105,9 @@ export function wrapRows(text: string, width: number): string[] {
 	for (const g of graphemes(text.slice(last))) addGrapheme(g);
 	emit(pieces, start);
 	return rows;
+}
+
+/** Wraps each line separately and flattens the rows; an empty line gives one empty row. */
+export function wrapLines(lines: readonly string[], width: number, options: WrapOptions = {}): string[] {
+	return lines.flatMap(line => wrapRows(line, width, options));
 }

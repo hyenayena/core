@@ -7,19 +7,22 @@ const ST_C1 = 0x9c;
 const STRING_INTRODUCERS = new Set([0x5d, 0x50, 0x5f, 0x5e, 0x58]); // ] P _ ^ X
 const C1_STRING_INTRODUCERS = new Set([0x9d, 0x90, 0x9f, 0x9e, 0x98]);
 
-function isInvisible(c: number): boolean {
-	return (
-		(c >= 0x202a && c <= 0x202e) ||
-		(c >= 0x2066 && c <= 0x2069) ||
-		c === 0x200e ||
-		c === 0x200f ||
-		c === 0x061c ||
-		(c >= 0x200b && c <= 0x200d) ||
-		(c >= 0x2060 && c <= 0x2064) ||
-		c === 0xfeff ||
-		c === 0x00ad ||
-		(c >= 0xfff9 && c <= 0xfffb)
-	);
+const FORMAT = /^\p{Cf}$/u;
+
+type Options = {
+	// How CR is treated: a space, dropped (CRLF folds to LF), or turned into a newline.
+	cr: 'space' | 'drop' | 'newline';
+	newline: 'space' | 'keep';
+	tab: 'space' | 'keep' | 'expand';
+	keepZwj: boolean;
+};
+
+const TEXT: Options = {cr: 'space', newline: 'space', tab: 'space', keepZwj: false};
+const BLOCK: Options = {cr: 'drop', newline: 'keep', tab: 'expand', keepZwj: true};
+const INPUT: Options = {cr: 'newline', newline: 'keep', tab: 'keep', keepZwj: true};
+
+function isTag(cp: number): boolean {
+	return cp >= 0xe0000 && cp <= 0xe007f;
 }
 
 function skipCsi(s: string, i: number): number {
@@ -41,7 +44,7 @@ function skipString(s: string, i: number): number {
 }
 
 /** Linear single-pass removal of escape sequences and unsafe characters. */
-function clean(s: string): string {
+function clean(s: string, o: Options): string {
 	const out: string[] = [];
 	let i = 0;
 	while (i < s.length) {
@@ -58,8 +61,10 @@ function clean(s: string): string {
 				let j = i + 1;
 				while (j < s.length && s.charCodeAt(j) >= 0x20 && s.charCodeAt(j) <= 0x2f) j++;
 				i = j < s.length ? j + 1 : j;
-			} else {
+			} else if (n >= 0x20 && n <= 0x7e) {
 				i += 2;
+			} else {
+				i++;
 			}
 			continue;
 		}
@@ -71,46 +76,55 @@ function clean(s: string): string {
 			i = skipString(s, i + 1);
 			continue;
 		}
-		if (c === 0x09 || c === 0x0a || c === 0x0d || c === 0x2028 || c === 0x2029) {
-			out.push(' ');
+		if (c === 0x0d) {
+			const crlf = s.charCodeAt(i + 1) === 0x0a;
+			if (o.cr === 'space') out.push(' ');
+			else if (o.cr === 'newline' && !crlf) out.push('\n');
 			i++;
 			continue;
 		}
-		if (c < 0x20 || (c >= 0x7f && c <= 0x9f) || isInvisible(c)) {
+		if (c === 0x0a || c === 0x2028 || c === 0x2029) {
+			out.push(o.newline === 'keep' ? '\n' : ' ');
+			i++;
+			continue;
+		}
+		if (c === 0x09) {
+			out.push(o.tab === 'keep' ? '\t' : o.tab === 'expand' ? '    ' : ' ');
+			i++;
+			continue;
+		}
+		if (c < 0x20 || (c >= 0x7f && c <= 0x9f)) {
 			i++;
 			continue;
 		}
 		if (c >= 0xd800 && c <= 0xdbff) {
 			const d = s.charCodeAt(i + 1);
 			if (d >= 0xdc00 && d <= 0xdfff) {
-				out.push(s.slice(i, i + 2));
+				const pair = s.slice(i, i + 2);
+				if (!isTag(pair.codePointAt(0) as number) && !FORMAT.test(pair)) out.push(pair);
 				i += 2;
 			} else {
-				out.push('�');
+				out.push('\ufffd');
 				i++;
 			}
 			continue;
 		}
 		if (c >= 0xdc00 && c <= 0xdfff) {
-			out.push('�');
+			out.push('\ufffd');
 			i++;
 			continue;
+		}
+		if (c >= 0xad) {
+			const ch = s[i] as string;
+			if (FORMAT.test(ch) && !(o.keepZwj && c === 0x200d)) {
+				i++;
+				continue;
+			}
 		}
 		out.push(s[i] as string);
 		i++;
 	}
 	return out.join('');
-}
-
-// Tag characters are astral, so the code-unit scan above cannot see them.
-function stripTags(s: string): string {
-	let out = '';
-	for (const ch of s) {
-		const cp = ch.codePointAt(0) as number;
-		if (cp >= 0xe0000 && cp <= 0xe007f) continue;
-		out += ch;
-	}
-	return out;
 }
 
 /** Makes untrusted text safe to render on one terminal line; never throws. */
@@ -120,7 +134,7 @@ export function sanitizeText(input: unknown, maxCodePoints: number): string {
 	if (!(max > 0)) return '';
 	let s: string;
 	try {
-		s = stripTags(clean(input.slice(0, max * 4)));
+		s = clean(input.slice(0, max * 4), TEXT);
 		s = s.replace(/ {2,}/g, ' ').trim();
 		if (Array.from(s).length <= max) return s;
 		const parts = graphemes(s);
@@ -136,6 +150,25 @@ export function sanitizeText(input: unknown, maxCodePoints: number): string {
 	} catch {
 		return '';
 	}
+}
+
+function run(input: unknown, o: Options): string {
+	if (typeof input !== 'string') return '';
+	try {
+		return clean(input, o);
+	} catch {
+		return '';
+	}
+}
+
+/** Multi-line display text: keeps \n, expands tabs to 4 spaces, keeps ZWJ; never throws. */
+export function sanitizeBlock(input: unknown): string {
+	return run(input, BLOCK);
+}
+
+/** Editable input: keeps \n and \t, folds CR and CRLF to \n; never throws. */
+export function sanitizeMultilineInput(input: unknown): string {
+	return run(input, INPUT);
 }
 
 export function sanitizeToken(s: string, max = 40): string {

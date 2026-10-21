@@ -4,6 +4,7 @@ import type {MountControl, Setting, SettingsTab} from '../../../../src/api.js';
 import {sanitizeText} from '../hints/sanitize.js';
 import {c} from '../hints/style.js';
 import {truncateCells} from '../hints/width.js';
+import {windowStart} from '../kit/window.js';
 import {useViewHost} from '../view/use-view-host.js';
 
 const TEXT_MAX = 200;
@@ -47,16 +48,6 @@ function linesOf(tab: SettingsTab | undefined, value: (setting: Setting) => stri
 		});
 	}
 	return lines;
-}
-
-/** First line of a window of `size` lines that keeps `focus` visible, with its label when it fits. */
-export function windowStart(total: number, size: number, focus: number, labelOf: number): number {
-	if (total <= size) return 0;
-	const max = total - size;
-	let start = Math.min(Math.max(0, focus - Math.floor(size / 2)), max);
-	if (labelOf < start && focus - labelOf < size) start = labelOf;
-	if (focus >= start + size) start = focus - size + 1;
-	return Math.min(Math.max(0, start), max);
 }
 
 export default function Settings({tabs, control}: {tabs: SettingsTab[]; control: MountControl}) {

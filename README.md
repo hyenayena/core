@@ -54,6 +54,14 @@ For module authors: the `ViewHost` core passes to a mounted view carries an opti
 
 Residual risks: verified only with fake TTY streams; SIGKILL leaves mouse mode on; terminals limited to X10 encoding lose clicks at coordinates >= 95.
 
+## Public kit (`src/kit/`)
+
+Other modules may import values and types from core's kit (and nothing else of core's source), each through one adapter file of their own.
+- `kit/text.ts` is pure: no React or Ink anywhere in its import graph (`tests/kit/purity.test.ts`). It exports `graphemes`, `cellWidth(grapheme)`, `stringCells`, `truncateCells`, `sliceCells`; `sanitizeText`, `sanitizeBlock`, `sanitizeMultilineInput`; `wrapRows(text, width, {mode: 'word' | 'char'})` and `wrapLines`; `windowLine`, `indexAtCell`; `windowStart` (`kit/window.ts`, also used by Settings); `inputWindow`, `offsetAtCell` (multi-line input geometry by cells, `…` cut markers); and the types `Tone`, `FrameRow`, `PickerItem`.
+- `kit/ui.ts` holds the React/Ink parts: `useViewHost`, `Spinner`, `useSpinnerFrame`, `SPINNERS` (`squareCorners`, `braille`), `ListPicker`, `StatusBar`, `Frame`.
+- All sanitisers strip every `\p{Cf}` code point (bidi, zero-width, tag characters, U+180E and so on); `sanitizeBlock` and `sanitizeMultilineInput` keep ZWJ. ESC followed by `nF` intermediates is stripped whole, and a C1 ST terminates ESC strings.
+- `wrapRows` re-emits only SGR that is already in its input and closes it with a reset; other escapes are zero-width.
+
 ## Logging
 `App` takes an optional `log` prop (`Logger` from the host `src/api.ts`); `main.tsx` passes `yena.log` (scope `core`). Without it `src/noop-log.ts` is used and nothing is written. Records:
 - warn `command failed` {command, err}: the command name and the error only.
@@ -76,7 +84,7 @@ Keys:
 
 Usage row: when a known command or subcommand has `usage`, a dim usage line is shown, and while typing arguments the current placeholder is bold and underlined (`claude ask ` highlights `<text>`; a variadic `<name>…` stays highlighted; flags and positions past the last slot are not). It appears for subcommand lists and, with no items left, as a non-interactive usage-only row (`claude ask `): Tab and the ghost do nothing, Right/End only move the cursor, Up recalls history, Esc dismisses it, a cursor off the end hides it. Commands without `usage` get no name-only row.
 
-Behaviour changes to the original prompt: a long line scrolls horizontally on one row instead of wrapping; the cursor and Backspace work on graphemes; pasted text is sanitised (tabs and newlines become spaces, escapes are stripped) and never submits or accepts; the echo of a submitted line is sanitised and collapses space runs; Esc, Tab, Home and End are bound. Command names, aliases, usage and descriptions from plugins are sanitised before display. An unknown command prints `Unknown command: x`, followed by `Did you mean: y?` when a close match exists (typed token of 2 or more characters; distance 1 up to 4 characters, 2 above, or a prefix); `help <command>` shows usage, description and subcommands, and `help <unknown>` fails with `Error: Unknown command: x`.
+Behaviour changes to the original prompt: a long line scrolls horizontally on one row instead of wrapping; the cursor and Backspace work on graphemes; pasted text is sanitised (tabs and newlines become spaces, escapes and all format characters are stripped) and never submits or accepts; the echo of a submitted line is sanitised and collapses space runs; Esc, Tab, Home and End are bound. Command names, aliases, usage and descriptions from plugins are sanitised before display. An unknown command prints `Unknown command: x`, followed by `Did you mean: y?` when a close match exists (typed token of 2 or more characters; distance 1 up to 4 characters, 2 above, or a prefix); `help <command>` shows usage, description and subcommands, and `help <unknown>` fails with `Error: Unknown command: x`.
 
 Layout: rows >= 17 allow 7 hint rows, 11 to 16 allow 4, 10 or fewer allow 2 (never more than rows - 2); extra items become `+N more`; below 20 columns only names are shown, below 8 columns no list. The live frame never exceeds the terminal height minus one row and no line exceeds the width minus one. `NO_COLOR` (non-empty) removes colours; bold, dim, underline, inverse and the `›` marker stay.
 

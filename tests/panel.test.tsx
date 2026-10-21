@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import React, {useEffect, useState} from 'react';
 import {Text, useInput} from 'ink';
 import App, {panelGeometry} from '../src/app.js';
-import {windowStart} from '../src/components/Settings.js';
+import {windowStart} from '../src/kit/window.js';
 import {createRegistry} from '../src/commands.js';
 import {mountHarness} from './testkit.js';
 import type {Command, MountControl, Setting} from '../../../src/api.js';
