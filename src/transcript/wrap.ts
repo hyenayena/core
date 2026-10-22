@@ -1,4 +1,4 @@
-import {cellWidth, graphemes} from '../hints/width.js';
+import {cellWidth, graphemes, stringCells} from '../hints/width.js';
 
 const ESC = '\\u001b';
 const BEL = '\\u0007';
@@ -9,6 +9,12 @@ const TOKEN = new RegExp(
 const SGR = new RegExp(`^${ESC}\\[([0-9;:]{0,64})m$`);
 const RESET = String.fromCharCode(27) + '[0m';
 const MAX_CARRY = 32;
+
+/** Cell width of text that may contain escape sequences, which take no cells. */
+export function styledCells(text: string): number {
+	if (typeof text !== 'string' || text === '') return 0;
+	return stringCells(text.replace(TOKEN, ''));
+}
 
 type Piece = {s: string; w: number; space: boolean; sgr: boolean};
 
