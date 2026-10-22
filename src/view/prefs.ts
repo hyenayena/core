@@ -3,9 +3,11 @@ import path from 'node:path';
 
 export const TITLE_BAR_COLORS = ['olive', 'blue', 'teal', 'gray', 'inverse'] as const;
 export type TitleBarColor = (typeof TITLE_BAR_COLORS)[number];
-export type CorePrefs = {titleBar: TitleBarColor; colors: boolean; mouse: boolean};
+export const AGENT_MODES = ['policy', 'ask', 'off'] as const;
+export type AgentMode = (typeof AGENT_MODES)[number];
+export type CorePrefs = {titleBar: TitleBarColor; colors: boolean; mouse: boolean; agentCommands: AgentMode};
 
-export const DEFAULT_PREFS: CorePrefs = {titleBar: 'olive', colors: true, mouse: true};
+export const DEFAULT_PREFS: CorePrefs = {titleBar: 'olive', colors: true, mouse: true, agentCommands: 'policy'};
 
 let prefs: CorePrefs = {...DEFAULT_PREFS};
 let file: string | undefined;
@@ -17,6 +19,7 @@ const clean = (raw: unknown): CorePrefs => {
 		titleBar: TITLE_BAR_COLORS.includes(r.titleBar as TitleBarColor) ? (r.titleBar as TitleBarColor) : DEFAULT_PREFS.titleBar,
 		colors: typeof r.colors === 'boolean' ? r.colors : DEFAULT_PREFS.colors,
 		mouse: typeof r.mouse === 'boolean' ? r.mouse : DEFAULT_PREFS.mouse,
+		agentCommands: AGENT_MODES.includes(r.agentCommands as AgentMode) ? (r.agentCommands as AgentMode) : DEFAULT_PREFS.agentCommands,
 	};
 };
 

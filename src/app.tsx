@@ -6,6 +6,7 @@ import TitleBar from './components/TitleBar.js';
 import Transcript, {scrollHint} from './components/Transcript.js';
 import type {
 	Command,
+	CommandBridge,
 	CommandContext,
 	FocusDirection,
 	Logger,
@@ -18,6 +19,9 @@ import {noopLog} from './noop-log.js';
 import type {Registry} from './commands.js';
 import {buildCatalog} from './hints/catalog.js';
 import {sanitizeText} from './hints/sanitize.js';
+import {errorLines} from './error-lines.js';
+import {parseLine} from './parse-line.js';
+import {createCommandBridge, type AgentViewHandle} from './agent/bridge.js';
 import {unknownCommandLines} from './hints/typo.js';
 import {c} from './hints/style.js';
 import {isConsoleToggle, isQuitLine} from './view/keys.js';
@@ -33,7 +37,9 @@ type Line = {id: number; text: string; color?: string; welcome?: boolean};
 
 type Pending = {id: number; resolve: () => void; reject: (error: Error) => void};
 
-type Mounted = {id: number; element: UiElement};
+type Mounted = {id: number; element: UiElement; activity?: boolean};
+
+type ActivityInfo = {agent: boolean};
 
 type Focus = 'main' | 'panel';
 
@@ -46,8 +52,6 @@ export type AppMouse = {
 	resume(): void;
 };
 
-const MAX_ERROR_LINES = 20;
-const MAX_ERROR_LINE = 4096;
 const MAX_PANEL_LINES = 500;
 // The full-screen app keeps its own scrollback; the oldest lines go past this.
 export const MAX_LINES = 5000;
@@ -55,26 +59,12 @@ const TITLE_MAX = 200;
 // Below this width the open console covers the chat instead of sitting beside it
 const SPLIT_MIN_COLUMNS = 60;
 const MAX_MOUSE_LISTENERS = 8;
+// How long a console opened for an assistant stays after the last owner ended, unless the user touched it.
+export const AUTO_PANEL_GRACE_MS = 3000;
 
 export const WELCOME = 'yena — type "help" for the list of commands';
 export const WELCOME_WITH_VIEW = 'yena — press Esc twice to open the console; type "help" there for the list of commands';
 export const PANEL_TITLE = 'Console · Esc Esc close · ← chat';
-
-function errorLines(error: unknown): string[] {
-	let message: string;
-	try {
-		message = error instanceof Error ? String(error.message) : String(error);
-	} catch {
-		message = 'unprintable error';
-	}
-	const lines = message
-		.slice(0, MAX_ERROR_LINES * MAX_ERROR_LINE)
-		.split('\n')
-		.slice(0, MAX_ERROR_LINES)
-		.map(l => sanitizeText(l, MAX_ERROR_LINE));
-	const out = lines.filter(l => l !== '');
-	return out.length > 0 ? out : ['unknown error'];
-}
 
 export type PanelGeometry = {split: boolean; panelColumns: number; mainColumns: number; panelRows: number};
 
@@ -99,7 +89,17 @@ const autostartCommands = (commands: Command[]): Command[] =>
 let nextId = 0;
 let nextMountId = 0;
 
-export default function App({registry, log = noopLog, mouse}: {registry: Registry; log?: Logger; mouse?: AppMouse}) {
+export default function App({
+	registry,
+	log = noopLog,
+	mouse,
+	graceMs = AUTO_PANEL_GRACE_MS,
+}: {
+	registry: Registry;
+	log?: Logger;
+	mouse?: AppMouse;
+	graceMs?: number;
+}) {
 	const {exit} = useApp();
 	const {stdout} = useStdout();
 	const {stdin} = useStdin();
@@ -149,6 +149,7 @@ export default function App({registry, log = noopLog, mouse}: {registry: Registr
 	const panelViewRows = side ? Math.max(1, geo.panelRows - 1) : Math.max(1, rows - 1);
 	const panelOutputRows = Math.max(0, geo.panelRows - 3);
 	const snapshot = {
+		columns,
 		active,
 		side,
 		split: geo.split,
@@ -173,9 +174,62 @@ export default function App({registry, log = noopLog, mouse}: {registry: Registr
 		}
 	}, [active, geo.mainColumns, panelInner, panelOpen, side, rows, panelViewRows]);
 
+	// Bumped on every user action on the console; an auto-opened console closes only if it stayed at its opening value.
+	const panelEpoch = useRef(0);
+	const activityMounts = useRef(new Map<number, ActivityInfo>());
+	const autoOpened = useRef(false);
+	const autoEpoch = useRef(0);
+	const owners = useRef(0);
+	const graceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+	const alive = useRef(true);
+	const clearGrace = () => {
+		if (graceTimer.current) clearTimeout(graceTimer.current);
+		graceTimer.current = null;
+	};
+	useEffect(
+		() => () => {
+			alive.current = false;
+			clearGrace();
+		},
+		[],
+	);
+
+	// An assistant run or activity view begins: open the console beside the chat if it is closed.
+	const startOwner = () => {
+		owners.current++;
+		clearGrace();
+		const l = live.current;
+		if (!l.side || l.panelOpen || autoOpened.current) return;
+		autoOpened.current = true;
+		autoEpoch.current = panelEpoch.current;
+		setPanelOpen(true);
+		refreshCatalog();
+		// Beside the chat the focus stays there; a console that covers the chat takes it.
+		setFocus(l.columns >= SPLIT_MIN_COLUMNS ? 'main' : 'panel');
+	};
+	const endOwner = () => {
+		owners.current = Math.max(0, owners.current - 1);
+		if (owners.current > 0 || !autoOpened.current) return;
+		if (panelEpoch.current !== autoEpoch.current) {
+			autoOpened.current = false;
+			return;
+		}
+		clearGrace();
+		graceTimer.current = setTimeout(() => {
+			graceTimer.current = null;
+			if (!alive.current || owners.current > 0 || !autoOpened.current) return;
+			autoOpened.current = false;
+			if (panelEpoch.current !== autoEpoch.current) return;
+			setPanelOpen(false);
+			setFocus('main');
+		}, graceMs);
+	};
+
 	const togglePanel = (): boolean => {
 		const l = live.current;
 		if (!l.side) return false;
+		panelEpoch.current++;
+		autoOpened.current = false;
 		const open = !l.panelOpen;
 		if (open) refreshCatalog();
 		setPanelOpen(open);
@@ -214,6 +268,7 @@ export default function App({registry, log = noopLog, mouse}: {registry: Registr
 			if (!l.side || !l.panelOpen || !l.split) return false;
 			const to: Focus | undefined = target === 'main' && direction === 'right' ? 'panel' : target === 'panel' && direction === 'left' ? 'main' : undefined;
 			if (!to) return false;
+			panelEpoch.current++;
 			setFocus(to);
 			return true;
 		},
@@ -235,18 +290,23 @@ export default function App({registry, log = noopLog, mouse}: {registry: Registr
 		if (!current || current.id !== id) return;
 		pending.current[target] = null;
 		dropMount(target, id);
+		let agentView = false;
 		if (target === 'main') {
 			setMain(null);
 			setMainTitle(undefined);
 			setFocus('panel');
 		} else {
 			setPanelView(null);
+			const info = activityMounts.current.get(id);
+			activityMounts.current.delete(id);
+			agentView = info?.agent === true;
+			if (info) endOwner();
 		}
 		if (error) {
 			log.warn('view failed', {id, err: error});
 			current.reject(error);
 		} else {
-			log.debug('view closed', {id});
+			log.debug('view closed', {id, ...(agentView && {agent: true})});
 			current.resolve();
 		}
 	};
@@ -310,10 +370,46 @@ export default function App({registry, log = noopLog, mouse}: {registry: Registr
 	// Console output stays in the panel while it sits beside a view, else it goes to the scrollback.
 	const printConsole = (text: string, color?: string) => (sideRef.current ? printPanel : printMain)(text, color);
 
+	// A passive panel view: no focus change, opens the console, hides the prompt. Used by assistant commands and `activity` mounts.
+	const mountActivity = (
+		build: (control: MountControl) => UiElement,
+		print: (text: string) => void,
+		agent: boolean,
+	): AgentViewHandle => {
+		const refused = (error: Error): AgentViewHandle => ({done: Promise.reject(error), close: () => {}});
+		if (pending.current.panel) return refused(new Error('A view is already mounted'));
+		const id = nextMountId++;
+		openMounts.current.add(id);
+		const control: MountControl = {close: () => settle('panel', id), print, host: makeHost('panel', id)};
+		let element: UiElement;
+		try {
+			element = build(control);
+		} catch (error) {
+			dropMount('panel', id);
+			return refused(error instanceof Error ? error : new Error(String(error)));
+		}
+		let resolve!: () => void;
+		let reject!: (error: Error) => void;
+		const done = new Promise<void>((res, rej) => {
+			resolve = res;
+			reject = rej;
+		});
+		pending.current.panel = {id, resolve, reject};
+		activityMounts.current.set(id, {agent});
+		log.debug('view mounted', {id, ...(agent ? {agent: true} : {activity: true})});
+		setPanelView({id, element, activity: true});
+		startOwner();
+		return {done, close: () => settle('panel', id)};
+	};
+
 	const mount =
 		(fallbackPrint: (text: string) => void, onMain: () => void): NonNullable<CommandContext['mount']> =>
-		(build, options) =>
-			new Promise<void>((resolve, reject) => {
+		(build, options) => {
+			if (options?.activity === true) {
+				if (options.target !== 'panel') return Promise.reject(new Error('Activity views can only be shown in the console panel'));
+				return mountActivity(build, fallbackPrint, false).done;
+			}
+			return new Promise<void>((resolve, reject) => {
 				const target: MountTarget = options?.target === 'panel' ? 'panel' : 'main';
 				if (pending.current[target]) {
 					reject(new Error('A view is already mounted'));
@@ -348,6 +444,34 @@ export default function App({registry, log = noopLog, mouse}: {registry: Registr
 					setFocus('panel');
 				}
 			});
+		};
+
+	const clearAll = () => {
+		setLines([]);
+		setPanelLines([]);
+		setAnchor(null);
+		setPanelScroll(0);
+	};
+
+	// The bridge outlives renders, so it reads the latest closures through this ref.
+	const mountAgentView = (build: (control: MountControl) => UiElement, print: (text: string) => void) => mountActivity(build, print, true);
+	const bridgeDeps = useRef({tee: printConsole, clear: clearAll, afterRun: refreshCatalog, mountView: mountAgentView, beforeRun: startOwner, endRun: endOwner});
+	bridgeDeps.current = {tee: printConsole, clear: clearAll, afterRun: refreshCatalog, mountView: mountAgentView, beforeRun: startOwner, endRun: endOwner};
+	const bridgeRef = useRef<CommandBridge | null>(null);
+	bridgeRef.current ??= createCommandBridge({
+		find: name => registry.find(name),
+		catalog: () => buildCatalog(registry.commands),
+		mode: () => getPrefs().agentCommands,
+		tee: (text, color) => bridgeDeps.current.tee(text, color),
+		clear: () => bridgeDeps.current.clear(),
+		exit,
+		mountView: (build, print) => bridgeDeps.current.mountView(build, print),
+		afterRun: () => bridgeDeps.current.afterRun(),
+		beforeRun: () => bridgeDeps.current.beforeRun(),
+		endRun: () => bridgeDeps.current.endRun(),
+		log,
+	});
+	const commandBridge = bridgeRef.current;
 
 	const makeCtx = (print: (text: string, color?: string) => void): CommandContext => {
 		// A command that opened the main view keeps printing into the scrollback above it.
@@ -355,12 +479,7 @@ export default function App({registry, log = noopLog, mouse}: {registry: Registr
 		const out = (text: string, color?: string) => (ownsMain ? printMain : print)(text, color);
 		return {
 			print: text => out(text),
-			clear: () => {
-				setLines([]);
-				setPanelLines([]);
-				setAnchor(null);
-				setPanelScroll(0);
-			},
+			clear: clearAll,
 			exit,
 			copyToClipboard: text => copyToClipboard(stdout, text),
 			suspend: fn => suspendTerminal(stdin as never, stdout as never, fn, mouse),
@@ -370,6 +489,7 @@ export default function App({registry, log = noopLog, mouse}: {registry: Registr
 					ownsMain = true;
 				},
 			),
+			commandBridge,
 		};
 	};
 
@@ -403,24 +523,28 @@ export default function App({registry, log = noopLog, mouse}: {registry: Registr
 			return;
 		}
 		printConsole(`> ${sanitizeText(raw, 4096)}`, c('gray'));
-		if (!line) return;
+		const parsed = parseLine(raw);
+		if (!parsed) return;
+		const {name, args} = parsed;
 
 		setHistory(prev => (prev.at(-1) === line ? prev : [...prev, line]));
 
-		const [name, ...args] = line.split(/\s+/);
-		const command = registry.find(name!);
+		const command = registry.find(name);
 		if (!command) {
 			log.debug('unknown command', {unknownCommand: true});
-			for (const text of unknownCommandLines(catalog, name!)) printConsole(text, c('red'));
+			for (const text of unknownCommandLines(catalog, name)) printConsole(text, c('red'));
 			return;
 		}
-		await runCommand(command, name!, args, printConsole);
+		await runCommand(command, name, args, printConsole);
 	};
 
 	useInput((input, key) => {
 		if (!isConsoleToggle(input, key)) {
 			// The transcript scrolls unless the side console has the input.
-			if (side && active === 'panel') return;
+			if (side && active === 'panel') {
+				panelEpoch.current++;
+				return;
+			}
 			const page = Math.max(1, viewportHeight() - 1);
 			if (key.pageUp) scrollBy(page);
 			else if (key.pageDown) scrollBy(-page);
@@ -465,10 +589,13 @@ export default function App({registry, log = noopLog, mouse}: {registry: Registr
 	const handleMouse = (e: MouseInputEvent) => {
 		if (!getPrefs().mouse) return;
 		const l = live.current;
+		const touchedConsole = (e.kind === 'press' || e.wheel !== undefined) && l.side && l.panelOpen;
 		const panelRect = l.split && panelRef.current ? measureElement(panelRef.current) : undefined;
 		const area = areaAt(e, {side: l.side, panelOpen: l.panelOpen, split: l.split, panelRect});
+		if (touchedConsole && area === 'panel') panelEpoch.current++;
 		if (e.kind === 'press' && e.button === 'left') {
 			if (l.side && l.panelOpen && l.split && area !== l.active) {
+				panelEpoch.current++;
 				setFocus(area);
 				live.current = {...l, active: area};
 			}
@@ -495,12 +622,15 @@ export default function App({registry, log = noopLog, mouse}: {registry: Registr
 	mouseHandler.current = handleMouse;
 	useEffect(() => mouse?.onMouse(e => mouseHandler.current(e)), [mouse]);
 
-	const consoleBody = (inner: number, height?: number) =>
-		panelView ? (
+	const consoleBody = (inner: number, height?: number) => {
+		const view = panelView && (
 			<MountBoundary key={panelView.id} onError={error => settle('panel', panelView.id, error)}>
 				{panelView.element as ReactNode}
 			</MountBoundary>
-		) : (
+		);
+		if (panelView && !panelView.activity) return view;
+		// The prompt keeps its place in the tree while an activity view is shown, so the draft survives.
+		const prompt = (
 			<Prompt
 				history={history}
 				catalog={catalog}
@@ -509,12 +639,24 @@ export default function App({registry, log = noopLog, mouse}: {registry: Registr
 				mouseRef={promptMouse}
 				columns={inner}
 				{...(height !== undefined && {rows: height})}
-				active={active === 'panel'}
+				active={active === 'panel' && !panelView}
 				isHostKey={isConsoleToggle}
-				{...(side && geo.split && {onLeftEdge: () => setFocus('main')})}
+				{...(side && geo.split && {onLeftEdge: () => {
+						panelEpoch.current++;
+						setFocus('main');
+					}})}
 				{...(side && {onDoubleEscape: () => void togglePanel()})}
 			/>
 		);
+		return (
+			<>
+				{view}
+				<Box key="prompt" flexDirection="column" display={panelView ? 'none' : 'flex'}>
+					{prompt}
+				</Box>
+			</>
+		);
+	};
 
 	const panel = () => {
 		const height = geo.panelRows;

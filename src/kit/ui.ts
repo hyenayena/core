@@ -3,3 +3,6 @@ export {Spinner, useSpinnerFrame, SPINNERS} from './Spinner.js';
 export {ListPicker, type ListPickerProps} from './ListPicker.js';
 export {StatusBar} from './StatusBar.js';
 export {Frame} from './Frame.js';
+export {BrailleBar, type BrailleBarProps} from './BrailleBar.js';
+export {OutputTail, type OutputTailProps} from './OutputTail.js';
+export {colorEnabled} from '../hints/style.js';

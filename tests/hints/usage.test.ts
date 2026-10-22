@@ -59,7 +59,7 @@ test('a usage that does not start with the command path is shown plain', () => {
 	const odd = {
 		commands: [],
 		byName: new Map([
-			['x', {name: 'x', description: '', usage: 'something else <a>', subs: [], index: 0}],
+			['x', {name: 'x', description: '', usage: 'something else <a>', agent: 'confirm' as const, subs: [], index: 0}],
 		]),
 	};
 	const h = computeHints(odd, 'x ');

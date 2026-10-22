@@ -1,3 +1,4 @@
+import type {AgentPolicy} from '../../../../src/api.js';
 import {sanitizeText} from './sanitize.js';
 
 export type CatalogSub = {
@@ -5,6 +6,8 @@ export type CatalogSub = {
 	aliases: string[];
 	usage: string;
 	description: string;
+	// Undefined when the subcommand declares nothing and inherits its command's policy.
+	agent: AgentPolicy | undefined;
 	subs: CatalogSub[];
 };
 
@@ -12,6 +15,7 @@ export type CatalogCommand = {
 	name: string;
 	description: string;
 	usage?: string;
+	agent: AgentPolicy;
 	subs: CatalogSub[];
 	complete?: unknown;
 	index: number;
@@ -38,6 +42,17 @@ function isObject(v: unknown): v is Record<string, unknown> {
 	return typeof v === 'object' && v !== null;
 }
 
+// A throwing getter or any value but the three literals must never widen access.
+function readAgent(e: Record<string, unknown>): AgentPolicy | undefined {
+	try {
+		const v = e['agent'];
+		if (v === undefined) return undefined;
+		return v === 'safe' || v === 'confirm' || v === 'deny' ? v : 'confirm';
+	} catch {
+		return 'confirm';
+	}
+}
+
 function buildSubs(raw: unknown, depth: number): CatalogSub[] {
 	if (depth > MAX_DEPTH || !Array.isArray(raw)) return [];
 	const out: CatalogSub[] = [];
@@ -62,6 +77,7 @@ function buildSubs(raw: unknown, depth: number): CatalogSub[] {
 				aliases,
 				usage: sanitizeText(e['usage'], MAX_TEXT),
 				description: sanitizeText(e['description'], MAX_TEXT),
+				agent: readAgent(e),
 				subs: buildSubs(e['subcommands'], depth + 1),
 			};
 			seen.add(name);
@@ -88,6 +104,7 @@ export function buildCatalog(commands: readonly unknown[]): Catalog {
 			const cmd: CatalogCommand = {
 				name,
 				description: sanitizeText(e['description'], MAX_TEXT),
+				agent: readAgent(e) ?? 'confirm',
 				subs: buildSubs(e['subcommands'], 1),
 				index: i,
 			};

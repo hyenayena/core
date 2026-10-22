@@ -3,7 +3,7 @@ import {mkdtempSync, readFileSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {test} from 'node:test';
-import {createRegistry} from '../src/commands.js';
+import {createRegistry, settingsTabs} from '../src/commands.js';
 import {loadPrefs, getPrefs, setPrefs, subscribePrefs} from '../src/view/prefs.js';
 import {collectSettingsTabs} from '../src/view/settings-tabs.js';
 
@@ -58,4 +58,27 @@ test('the Appearance tab offers Mouse On/Off bound to the preference', () => {
 	mouse.set('on');
 	assert.equal(getPrefs().mouse, true);
 	assert.equal(mouse.get(), 'on');
+});
+
+test('agentCommands defaults to policy, rejects unknown values and round-trips', () => {
+	const dir = tempDir();
+	assert.equal(loadPrefs(dir).agentCommands, 'policy');
+	writeFileSync(join(dir, 'appearance.json'), '{"agentCommands":"always"}');
+	assert.equal(loadPrefs(dir).agentCommands, 'policy');
+	setPrefs({agentCommands: 'off'});
+	assert.equal(loadPrefs(dir).agentCommands, 'off');
+	setPrefs({agentCommands: 'policy'});
+});
+
+test('settings offers an Assistant tab bound to agentCommands', () => {
+	const dir = tempDir();
+	loadPrefs(dir);
+	const tab = settingsTabs(createRegistry([]).commands).find(t => t.title === 'Assistant');
+	const setting = tab?.settings.find(s => s.key === 'agentCommands');
+	assert.ok(setting);
+	assert.deepEqual(setting.options.map(o => o.value), ['policy', 'ask', 'off']);
+	assert.equal(setting.get(), 'policy');
+	setting.set('ask');
+	assert.equal(getPrefs().agentCommands, 'ask');
+	setting.set('policy');
 });

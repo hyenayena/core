@@ -99,3 +99,27 @@ test('size and depth caps', () => {
 test('non-array input never throws', () => {
 	assert.deepEqual(buildCatalog(undefined as never).commands, []);
 });
+
+test('agent: only the three literals pass, a command defaults to confirm, a subcommand inherits', () => {
+	const cat = buildCatalog([
+		{name: 'a', description: 'A', agent: 'safe', run, subcommands: [{name: 's', agent: 'deny'}, {name: 'u'}, {name: 'bad', agent: 'yes'}]},
+		{name: 'b', description: 'B', run},
+		{name: 'c', description: 'C', agent: 'allow', run},
+		{name: 'd', description: 'D', agent: 5, run},
+	]);
+	assert.deepEqual(cat.commands.map(c => c.agent), ['safe', 'confirm', 'confirm', 'confirm']);
+	assert.deepEqual(cat.byName.get('a')!.subs.map(s => s.agent), ['deny', undefined, 'confirm']);
+});
+
+test('agent: a throwing getter becomes confirm and keeps the entry', () => {
+	const cmd = {name: 'x', description: 'X', get agent(): never { throw new Error('no'); }, subcommands: [{name: 'y', get agent(): never { throw new Error('no'); }}], run};
+	const cat = buildCatalog([cmd]);
+	assert.equal(cat.byName.get('x')?.agent, 'confirm');
+	assert.equal(cat.byName.get('x')?.subs[0]?.agent, 'confirm');
+});
+
+test("core's own commands declare their policies", () => {
+	const cat = buildCatalog(createRegistry([]).commands);
+	const policy = (n: string) => cat.byName.get(n)?.agent;
+	assert.deepEqual(['help', 'echo', 'clear', 'exit', 'settings'].map(policy), ['safe', 'safe', 'confirm', 'confirm', 'deny']);
+});

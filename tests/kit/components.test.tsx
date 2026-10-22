@@ -2,7 +2,7 @@ import React from 'react';
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {Text} from 'ink';
-import {Frame, ListPicker, Spinner, SPINNERS, StatusBar, useSpinnerFrame} from '../../src/kit/ui.js';
+import {BrailleBar, Frame, ListPicker, Spinner, SPINNERS, StatusBar, useSpinnerFrame} from '../../src/kit/ui.js';
 import {mountHarness, wait} from '../testkit.js';
 
 const ESC = String.fromCharCode(27);
@@ -122,4 +122,32 @@ test('StatusBar strips escapes and shows the text', async () => {
 	assert.match(plain(h.lastFrame()), /ok · done/);
 	assert.ok(!h.allOutput().includes(`${ESC}]52`));
 	h.unmount();
+});
+
+test('BrailleBar: rows at a narrow width, NO_COLOR uses inverse for fail', async () => {
+	const states = [...Array.from({length: 16}, () => 'pass' as const), ...Array.from({length: 8}, () => 'fail' as const)];
+	const h = mountHarness(<BrailleBar states={states} width={2} />);
+	await h.settle();
+	assert.equal(plain(h.lastFrame()).split('\n').filter(l => l.trim()).length, 2);
+	h.unmount();
+
+	const prev = process.env['NO_COLOR'];
+	process.env['NO_COLOR'] = '1';
+	try {
+		const n = mountHarness(<BrailleBar states={states} width={5} />);
+		await n.settle();
+		assert.ok(!new RegExp(ESC + '\\[(3[0-7]|9[0-7])m').test(n.lastFrame()));
+		n.unmount();
+		// The harness runs without chalk colour levels, so inspect the element props instead of SGR.
+		type El = React.ReactElement<{children?: El | El[]; inverse?: boolean; color?: string; dimColor?: boolean}>;
+		const root = BrailleBar({states, width: 5}) as El;
+		const rows = ([] as El[]).concat(root.props.children ?? []);
+		const cells = rows.flatMap(row => ([] as El[]).concat(row.props.children ?? []));
+		const props = cells.map(cell => (cell.type as (p: unknown) => El)(cell.props).props);
+		assert.ok(props.some(p => p.inverse === true && p.color === undefined));
+		assert.ok(props.every(p => p.color === undefined));
+	} finally {
+		if (prev === undefined) delete process.env['NO_COLOR'];
+		else process.env['NO_COLOR'] = prev;
+	}
 });
