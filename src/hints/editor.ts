@@ -50,7 +50,8 @@ export type StepEnv = {
 
 export type StepResult = {
 	state: PromptState;
-	effect?: 'submit' | 'interrupt';
+	// 'tab': Tab with nothing to complete (the app uses it to open or close the console).
+	effect?: 'submit' | 'interrupt' | 'tab';
 	// The line to execute, set with the 'submit' effect
 	line?: string;
 };
@@ -332,7 +333,7 @@ function run(s: PromptState, k: KeyInput, env: StepEnv): StepResult {
 	}
 
 	if (k.tab) {
-		if (!h) return {state: s};
+		if (!h) return {state: s, ...(!k.shift && {effect: 'tab' as const})};
 		if (k.shift && !navigated) return {state: accept(s, h, h.items.length - 1, true)};
 		return {state: accept(s, h, sel, true)};
 	}

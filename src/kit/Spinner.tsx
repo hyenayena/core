@@ -4,6 +4,9 @@ import {Text} from 'ink';
 export const SPINNERS = {
 	squareCorners: ['◰', '◳', '◲', '◱'],
 	braille: ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'],
+	// Claude Code's look: a growing and shrinking star, and a blinking dot for a running tool.
+	sparkle: ['·', '✢', '✳', '✶', '✻', '✽', '✻', '✶', '✳', '✢'],
+	blink: ['●', ' '],
 };
 
 /** Current frame of a spinner; the timer runs only while `active`. */

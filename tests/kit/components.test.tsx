@@ -80,6 +80,11 @@ test('Spinner advances frames', async () => {
 	h.unmount();
 });
 
+test('SPINNERS has the Claude Code sparkle and blink frames', () => {
+	assert.deepEqual(SPINNERS.sparkle, ['·', '✢', '✳', '✶', '✻', '✽', '✻', '✶', '✳', '✢']);
+	assert.deepEqual(SPINNERS.blink, ['●', ' ']);
+});
+
 test('useSpinnerFrame starts no timer while inactive', async () => {
 	const real = globalThis.setInterval;
 	let started = 0;

@@ -5,7 +5,8 @@ import {Text, useInput} from 'ink';
 import App, {panelGeometry} from '../src/app.js';
 import {windowStart} from '../src/kit/window.js';
 import {createRegistry} from '../src/commands.js';
-import {mountHarness} from './testkit.js';
+import {createFakeStdout, mountHarness} from './testkit.js';
+import {useViewHost} from '../src/view/use-view-host.js';
 import type {Command, MountControl, Setting} from '../../../src/api.js';
 
 const LEFT = '\x1b[D';
@@ -69,7 +70,7 @@ test('an autostarted main view takes the screen and the focus; the console is cl
 	const frame = h.lastFrame();
 	assert.match(frame, /CHAT\[\] focused w100/);
 	assert.doesNotMatch(frame, /Console/);
-	assert.match(h.allOutput(), /press Esc twice to open the console/);
+	assert.match(h.allOutput(), /press Tab \(or Ctrl\+T\) to open the console/);
 	assert.doesNotMatch(frame, /chat-opened/, 'output before the chat opened is cleared');
 	h.unmount();
 });
@@ -351,7 +352,7 @@ test('§ and Ctrl+T toggle the console; Esc, t and \\ do not', async () => {
 		assert.doesNotMatch(h.lastFrame(), /Console/);
 	}
 	await type('\x14');
-	assert.match(h.lastFrame(), /Console · Esc Esc close/);
+	assert.match(h.lastFrame(), /Console · Tab close/);
 	await type('\x14');
 	assert.doesNotMatch(h.lastFrame(), /Console/);
 	h.unmount();
@@ -361,34 +362,24 @@ test('§ (sent for ⌘+§ and Ctrl+§) toggles the console and is never typed', 
 	const {h, type} = setup();
 	await h.settle(60);
 	await type('§');
-	assert.match(h.lastFrame(), /Console · Esc Esc close/);
+	assert.match(h.lastFrame(), /Console · Tab close/);
 	assert.doesNotMatch(h.lastFrame(), /> .*§/);
 	await type('§');
 	assert.doesNotMatch(h.lastFrame(), /Console/);
 	h.unmount();
 });
 
-test('Esc twice on an empty console line closes it; once, or with text, does not', async () => {
+test('Esc no longer toggles the console; Ctrl+T and § still do', async () => {
 	const {h, type} = setup();
 	await h.settle(60);
 	await type('§');
 	assert.match(h.lastFrame(), /Console/);
 	await type(ESC);
-	await h.settle(600);
-	await type(ESC);
-	await h.settle(60);
-	assert.match(h.lastFrame(), /Console/, 'two slow presses do not close it');
-	await type('abc');
-	await type(ESC);
 	await h.settle(40);
 	await type(ESC);
 	await h.settle(60);
-	assert.match(h.lastFrame(), /Console/, 'not with text on the line');
-	await type('\x15');
-	await type(ESC);
-	await h.settle(40);
-	await type(ESC);
-	await h.settle(60);
+	assert.match(h.lastFrame(), /Console/, 'double Esc leaves it open');
+	await type('\x14');
 	assert.doesNotMatch(h.lastFrame(), /Console/);
 	assert.match(h.lastFrame(), /CHAT\[\] focused/);
 	h.unmount();
@@ -404,20 +395,6 @@ test('a main view opens the console through host.togglePanel', async () => {
 	h.unmount();
 });
 
-test('createDoubleEsc fires only on the second press inside the window', async () => {
-	const {createDoubleEsc} = await import('../src/view/keys.js');
-	let t = 1000;
-	const d = createDoubleEsc(500, () => t);
-	assert.equal(d.press(), false);
-	t += 400;
-	assert.equal(d.press(), true);
-	assert.equal(d.press(), false);
-	t += 600;
-	assert.equal(d.press(), false);
-	d.reset();
-	t += 100;
-	assert.equal(d.press(), false);
-});
 
 test('a main view can show a title bar above the transcript; it goes when the view closes', async () => {
 	const {h, control} = setup();
@@ -513,7 +490,87 @@ test('a new main view starts on a clean transcript, keeping the welcome line', a
 	h.press(ENTER);
 	await h.settle(80);
 	assert.doesNotMatch(h.lastFrame(), /old message/);
-	assert.match(h.lastFrame(), /press Esc twice/);
+	assert.match(h.lastFrame(), /press Tab/);
 	assert.match(h.lastFrame(), /CHAT\[\]/);
+	h.unmount();
+});
+
+test('Tab on an empty console line closes the console, Tab with hints completes; Shift+← and Shift+→ move the focus', async () => {
+	const {h, type} = setup();
+	await h.settle(60);
+	await type('\x14');
+	assert.match(h.lastFrame(), /Console · Tab close/);
+	assert.match(h.lastFrame(), /CHAT\[\] idle/);
+	h.press('\x1b[1;2D');
+	await h.settle(60);
+	assert.match(h.lastFrame(), /CHAT\[\] focused/);
+	h.press('\x1b[1;2D');
+	await h.settle(60);
+	assert.match(h.lastFrame(), /CHAT\[\] focused/, 'nothing further left; the chat ignores the host key');
+	h.press('\x1b[1;2C');
+	await h.settle(60);
+	assert.match(h.lastFrame(), /CHAT\[\] idle/);
+	await type('hel');
+	await type('\t');
+	assert.match(h.lastFrame(), /Console/, 'Tab completed the hint instead');
+	assert.match(h.lastFrame(), /> help/);
+	await type('\x15');
+	await type('\t');
+	assert.doesNotMatch(h.lastFrame(), /Console/);
+	assert.match(h.lastFrame(), /CHAT\[\] focused/);
+	h.unmount();
+});
+
+test('a view can run a console line: it opens the console and runs it there; unknown words run nothing', async () => {
+	let ran: string[] = [];
+	const say: Command = {name: 'say', description: 'say it', usage: 'say <text>', run: (args, ctx) => {
+		ran = args;
+		ctx.print(`said ${args.join(' ')}`);
+	}};
+	const {h, control} = setup([say]);
+	await h.settle(60);
+	const host = control().host as unknown as {runLine(l: string): boolean; listCommands(): Array<{name: string; description: string; usage?: string}>};
+	assert.ok(host.listCommands().some(c => c.name === 'say' && c.description === 'say it' && c.usage === 'say <text>'));
+	assert.equal(host.runLine('nope x'), false);
+	assert.equal(host.runLine('say\u0007 x'), false);
+	assert.doesNotMatch(h.lastFrame(), /Console/);
+	assert.equal(host.runLine('say hi there'), true);
+	await h.settle(60);
+	assert.deepEqual(ran, ['hi', 'there']);
+	assert.match(h.lastFrame(), /Console/);
+	assert.match(h.lastFrame(), /said hi there/);
+	assert.match(h.lastFrame(), /CHAT\[\] focused/, 'the input stays in the view');
+	h.unmount();
+});
+
+function WidthView({control}: {control: MountControl}) {
+	const {columns, focused} = useViewHost(control.host);
+	return <Text>{`VIEW w${columns} ${focused ? 'focused' : 'idle'}`}</Text>;
+}
+
+test('a mounted view gets the new width in the same frame the console opens and closes', async () => {
+	const stdout = createFakeStdout({columns: 100, rows: 20});
+	const frames: string[] = [];
+	stdout.on('data', c => frames.push(String(c)));
+	const view: Command = {
+		name: 'view',
+		description: 'a view',
+		autostart: true,
+		run: async (_a, ctx) => {
+			await ctx.mount!(c => <WidthView control={c} />);
+		},
+	};
+	const h = mountHarness(<App registry={createRegistry([view])} />, {columns: 100, rows: 20}, {stdout});
+	await h.settle(80);
+	assert.match(h.lastFrame(), /VIEW w100 focused/);
+	for (const [key, width] of [['\x14', /VIEW w(\d+) idle/], ['\x14', /VIEW w100 focused/]] as const) {
+		const from = frames.length;
+		h.press(key);
+		await h.settle(80);
+		const drawn = frames.slice(from).filter(f => /VIEW w/.test(f));
+		assert.ok(drawn.length > 0);
+		for (const f of drawn) assert.match(f, width, 'no frame at the old width');
+		if (key === '\x14' && width.source.includes('idle')) assert.notEqual(Number(/VIEW w(\d+)/.exec(drawn[0]!)?.[1]), 100);
+	}
 	h.unmount();
 });

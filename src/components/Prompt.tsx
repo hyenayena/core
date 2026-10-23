@@ -18,7 +18,6 @@ import {indexAtCell, windowLine, type Windowed} from '../hints/viewport.js';
 import {c} from '../hints/style.js';
 import {graphemes, stringCells} from '../hints/width.js';
 import Hints from './Hints.js';
-import {createDoubleEsc} from '../view/keys.js';
 import type {MouseInputEvent} from '../mouse/sgr.js';
 
 type Props = {
@@ -33,8 +32,9 @@ type Props = {
 	active?: boolean;
 	// Left arrow on an empty line (moves focus to the neighbouring area).
 	onLeftEdge?: () => void;
+	/** Tab with nothing to complete. */
+	onIdleTab?: () => void;
 	// Esc twice on an empty line (closes the side console).
-	onDoubleEscape?: () => void;
 	isHostKey?: (input: string, key: Key) => boolean;
 	// Set to the click handler while mounted; it returns true when the click acted.
 	mouseRef?: React.MutableRefObject<((e: MouseInputEvent) => boolean) | null>;
@@ -90,7 +90,7 @@ export default function Prompt({
 	onInterrupt,
 	active = true,
 	onLeftEdge,
-	onDoubleEscape,
+	onIdleTab,
 	isHostKey,
 	mouseRef,
 	...size
@@ -99,7 +99,6 @@ export default function Prompt({
 	// in a ref and the state copy only drives rendering.
 	const stateRef = useRef<PromptState>(initialState);
 	const [state, setState] = useState<PromptState>(initialState);
-	const doubleEsc = useRef(createDoubleEsc());
 	const historyRef = useRef(history);
 	historyRef.current = history;
 	const terminal = useWindowSize();
@@ -122,6 +121,7 @@ export default function Prompt({
 		setState(result.state);
 		if (result.effect === 'interrupt') onInterrupt();
 		else if (result.effect === 'submit') onSubmit(result.line ?? '');
+		else if (result.effect === 'tab') onIdleTab?.();
 	};
 
 	useInput(
@@ -130,11 +130,6 @@ export default function Prompt({
 			// Page keys and Shift+↑/↓ scroll the transcript; the app handles them.
 			if (key.pageUp || key.pageDown || (key.shift && (key.upArrow || key.downArrow))) return;
 			if (key.leftArrow && onLeftEdge && stateRef.current.value === '') return onLeftEdge();
-			if (key.escape && onDoubleEscape && stateRef.current.value === '') {
-				if (doubleEsc.current.press()) return onDoubleEscape();
-			} else {
-				doubleEsc.current.reset();
-			}
 			apply(toKeyInput(input, key));
 		},
 		{isActive: active},

@@ -483,3 +483,12 @@ test('clickCursor and clickHint are total', () => {
 	const s = run(typed('ec')).state;
 	assert.equal(clickHint(s, 0, throwing), s);
 });
+
+test('Tab with nothing to complete reports the tab effect; with hints it completes; Shift+Tab never reports it', () => {
+	assert.equal(run([tab]).last.effect, 'tab');
+	assert.equal(run([...typed('zzzz'), tab]).last.effect, 'tab');
+	const completed = run([...typed('ec'), tab]);
+	assert.equal(completed.last.effect, undefined);
+	assert.notEqual(completed.state.value, 'ec');
+	assert.equal(run([shiftTab]).last.effect, undefined);
+});

@@ -24,7 +24,9 @@ import {parseLine} from './parse-line.js';
 import {createCommandBridge, type AgentViewHandle} from './agent/bridge.js';
 import {unknownCommandLines} from './hints/typo.js';
 import {c} from './hints/style.js';
-import {isConsoleToggle, isQuitLine} from './view/keys.js';
+import {focusMove, isConsoleToggle, isHostKey, isQuitLine} from './view/keys.js';
+import type {ViewCommandHost} from './view/view-commands.js';
+import {ViewLayoutContext} from './view/use-view-host.js';
 import {copyToClipboard} from './view/clipboard.js';
 import {suspendTerminal} from './view/suspend.js';
 import {getPrefs, subscribePrefs} from './view/prefs.js';
@@ -59,12 +61,14 @@ const TITLE_MAX = 200;
 // Below this width the open console covers the chat instead of sitting beside it
 const SPLIT_MIN_COLUMNS = 60;
 const MAX_MOUSE_LISTENERS = 8;
+// The same cap as a line typed in the console or run by an assistant.
+const RUN_LINE_MAX = 4096;
 // How long a console opened for an assistant stays after the last owner ended, unless the user touched it.
 export const AUTO_PANEL_GRACE_MS = 3000;
 
 export const WELCOME = 'yena — type "help" for the list of commands';
-export const WELCOME_WITH_VIEW = 'yena — press Esc twice to open the console; type "help" there for the list of commands';
-export const PANEL_TITLE = 'Console · Esc Esc close · ← chat';
+export const WELCOME_WITH_VIEW = 'yena — press Tab (or Ctrl+T) to open the console; type "help" there for the list of commands';
+export const PANEL_TITLE = 'Console · Tab close · ⇧← chat';
 
 export type PanelGeometry = {split: boolean; panelColumns: number; mainColumns: number; panelRows: number};
 
@@ -163,6 +167,9 @@ export default function App({
 	};
 	const live = useRef(snapshot);
 	live.current = snapshot;
+	// The same values the hosts report, handed to the mounted views in this render (see ViewLayoutContext).
+	const mainLayout = useMemo(() => ({focused: active === 'main', columns: geo.mainColumns}), [active, geo.mainColumns]);
+	const panelLayout = useMemo(() => ({focused: active === 'panel', columns: panelInner}), [active, panelInner]);
 	const listeners = useRef<Set<() => void>>(new Set());
 	useEffect(() => {
 		for (const l of [...listeners.current]) {
@@ -225,6 +232,19 @@ export default function App({
 		}, graceMs);
 	};
 
+	const moveFocus = (direction: FocusDirection): boolean => {
+		const l = live.current;
+		if (!l.side || !l.panelOpen || !l.split) return false;
+		const to: Focus = direction === 'right' ? 'panel' : 'main';
+		if (l.active === to) return false;
+		panelEpoch.current++;
+		setFocus(to);
+		return true;
+	};
+
+	// The latest submit, for views that run console lines (it reads this render's state).
+	const submitRef = useRef<(raw: string) => Promise<void>>(async () => {});
+
 	const togglePanel = (): boolean => {
 		const l = live.current;
 		if (!l.side) return false;
@@ -244,7 +264,23 @@ export default function App({
 		for (const l of [...mouseListeners.current[target]]) if (l.mountId === mountId) mouseListeners.current[target].delete(l);
 	};
 
-	const makeHost = (target: MountTarget, mountId: number): ViewHost & ViewMouseHost => ({
+	const makeHost = (target: MountTarget, mountId: number): ViewHost & ViewMouseHost & ViewCommandHost => ({
+		runLine: line => {
+			if (typeof line !== 'string' || line.length > RUN_LINE_MAX || /[\p{Cc}\p{Cf}]/u.test(line)) return false;
+			const parsed = parseLine(line);
+			if (!parsed || !registry.find(parsed.name)) return false;
+			const l = live.current;
+			// The output goes to the console, so it is shown; the input stays where the user typed.
+			if (l.side && !l.panelOpen) {
+				refreshCatalog();
+				setPanelOpen(true);
+			}
+			// Runs in the background like a typed line; the caller only learns whether it was a command.
+			void submitRef.current(line);
+			return true;
+		},
+		listCommands: () =>
+			buildCatalog(registry.commands).commands.map(c => ({name: c.name, description: c.description, ...(c.usage !== undefined && {usage: c.usage})})),
 		subscribeMouse: fn => {
 			const set = mouseListeners.current[target];
 			if (typeof fn !== 'function' || !openMounts.current.has(mountId) || set.size >= MAX_MOUSE_LISTENERS) return () => {};
@@ -264,15 +300,10 @@ export default function App({
 			};
 		},
 		move: (direction: FocusDirection) => {
-			const l = live.current;
-			if (!l.side || !l.panelOpen || !l.split) return false;
-			const to: Focus | undefined = target === 'main' && direction === 'right' ? 'panel' : target === 'panel' && direction === 'left' ? 'main' : undefined;
-			if (!to) return false;
-			panelEpoch.current++;
-			setFocus(to);
-			return true;
+			if ((target === 'main' && direction !== 'right') || (target === 'panel' && direction !== 'left')) return false;
+			return moveFocus(direction);
 		},
-		isHostKey: isConsoleToggle,
+		isHostKey,
 		togglePanel,
 		quit: () => exit(),
 		setTitle: (title, detail) => {
@@ -538,7 +569,15 @@ export default function App({
 		await runCommand(command, name, args, printConsole);
 	};
 
+	submitRef.current = handleSubmit;
+
+
 	useInput((input, key) => {
+		const direction = focusMove(key);
+		if (direction) {
+			moveFocus(direction);
+			return;
+		}
 		if (!isConsoleToggle(input, key)) {
 			// The transcript scrolls unless the side console has the input.
 			if (side && active === 'panel') {
@@ -624,9 +663,11 @@ export default function App({
 
 	const consoleBody = (inner: number, height?: number) => {
 		const view = panelView && (
-			<MountBoundary key={panelView.id} onError={error => settle('panel', panelView.id, error)}>
-				{panelView.element as ReactNode}
-			</MountBoundary>
+			<ViewLayoutContext.Provider value={panelLayout}>
+				<MountBoundary key={panelView.id} onError={error => settle('panel', panelView.id, error)}>
+					{panelView.element as ReactNode}
+				</MountBoundary>
+			</ViewLayoutContext.Provider>
 		);
 		if (panelView && !panelView.activity) return view;
 		// The prompt keeps its place in the tree while an activity view is shown, so the draft survives.
@@ -640,12 +681,12 @@ export default function App({
 				columns={inner}
 				{...(height !== undefined && {rows: height})}
 				active={active === 'panel' && !panelView}
-				isHostKey={isConsoleToggle}
+				isHostKey={isHostKey}
+				{...(side && {onIdleTab: () => void togglePanel()})}
 				{...(side && geo.split && {onLeftEdge: () => {
 						panelEpoch.current++;
 						setFocus('main');
 					}})}
-				{...(side && {onDoubleEscape: () => void togglePanel()})}
 			/>
 		);
 		return (
@@ -678,7 +719,7 @@ export default function App({
 			>
 				<Box flexShrink={0}>
 					<Text dimColor wrap="truncate-end">
-						{geo.split ? PANEL_TITLE : 'Console · Esc Esc close'}
+						{geo.split ? PANEL_TITLE : 'Console · Tab close'}
 					</Text>
 				</Box>
 				{/* A console view gets the whole panel; the output only fills what the prompt leaves */}
@@ -724,10 +765,12 @@ export default function App({
 						{mainTitle !== undefined && <TitleBar {...mainTitle} columns={geo.mainColumns} />}
 						{transcript}
 						<Box ref={mainViewRef} flexDirection="column" flexShrink={0}>
-							<MountBoundary key={main.id} onError={error => settle('main', main.id, error)}>
-								{/* UiElement is opaque in the host contract; it is a React element here */}
-								{main.element as ReactNode}
-							</MountBoundary>
+							<ViewLayoutContext.Provider value={mainLayout}>
+								<MountBoundary key={main.id} onError={error => settle('main', main.id, error)}>
+									{/* UiElement is opaque in the host contract; it is a React element here */}
+									{main.element as ReactNode}
+								</MountBoundary>
+							</ViewLayoutContext.Provider>
 						</Box>
 					</Box>
 					{panelOpen && panel()}

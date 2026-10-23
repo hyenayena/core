@@ -88,7 +88,7 @@ test('bracketed paste still works', async () => {
 	h.unmount();
 });
 
-test('Esc twice still closes the side console', async () => {
+test('Ctrl+T still closes the side console; double Esc does not', async () => {
 	const {h} = setup(true);
 	await h.settle(60);
 	h.press(CTRL_T);
@@ -97,6 +97,9 @@ test('Esc twice still closes the side console', async () => {
 	h.press(ESC);
 	await h.settle(40);
 	h.press(ESC);
+	await h.settle(80);
+	assert.match(h.lastFrame(), /Console/);
+	h.press(CTRL_T);
 	await h.settle(80);
 	assert.doesNotMatch(h.lastFrame(), /Console/);
 	h.unmount();
