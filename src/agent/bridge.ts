@@ -29,6 +29,8 @@ export const MAX_TIMEOUT_MS = 600_000;
 
 const UNSAFE_LINE = new RegExp('[\\p{Cc}\\p{Cf}]', 'u');
 
+export const hasUnsafeChars = (line: string): boolean => UNSAFE_LINE.test(line);
+
 export type AgentViewHandle = {done: Promise<void>; close: () => void};
 
 export type BridgeDeps = {
@@ -157,7 +159,7 @@ export function createCommandBridge(deps: BridgeDeps): CommandBridge {
 			safeTee(`[${caller}] > ${sanitizeText(raw, MAX_LINE)}`, c('magenta'));
 			if (raw.trim() === '') return finish('invalid', '', 'the line is empty');
 			if (raw.length > MAX_LINE) return finish('invalid', '', `the line is longer than ${MAX_LINE} characters`);
-			if (UNSAFE_LINE.test(raw)) return finish('invalid', '', 'the line contains control or formatting characters');
+			if (hasUnsafeChars(raw)) return finish('invalid', '', 'the line contains control or formatting characters');
 			const parsed = parseLine(raw);
 			if (!parsed || isQuitLine(parsed.line)) return finish('invalid', '', 'the line is not a runnable command');
 

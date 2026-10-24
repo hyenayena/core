@@ -1,7 +1,8 @@
 {
 	"name": "core",
-	"version": "0.7.0",
+	"version": "0.9.0",
 	"description": "Core module",
 	"runtime": "node",
-	"entry": "src/main.tsx"
+	"entry": "src/main.tsx",
+	"headless": "src/headless.ts"
 }

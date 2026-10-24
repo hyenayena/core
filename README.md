@@ -1,6 +1,6 @@
 # core
 
-Command REPL for yena (Ink). Commands receive a `CommandContext` (see `src/api.ts` in the host).
+Command REPL for yena (Ink). Also runs one line from the host terminal (see "Running a line from the host terminal"). Commands receive a `CommandContext` (see `src/api.ts` in the host).
 
 ## Screen layout: main view and console
 
@@ -122,6 +122,10 @@ Manual TTY check:
 11. `NO_COLOR=1`: the highlight stays readable (underline, marker).
 12. Ctrl+C at the prompt exits; inside `claude chat` the prompt and hints are hidden.
 13. With the claude module and a credential: the chat opens at startup. Tab (or Ctrl+T) opens the console on the right, Shift+← moves to the chat, Shift+→ back, Tab on an empty console line closes it; double Esc does nothing. In the chat `/project list` runs in the console, `//text` sends `/text` to Claude. PageUp/Shift+↑ scroll the chat transcript. `settings` shows the Claude tab; pick a model, Esc, then `chat` opens a new chat with it (status bar shows the model). Below 60 columns the console covers the chat.
+
+## Running a line from the host terminal
+
+`./yena <console line>` (host script) runs `src/cli.ts --run -- <words>`, which calls the `headless` file named in `yena.json` (`src/headless.ts`, core 0.8.0+): the line is checked like an assistant line (not empty, at most 4096 characters, no control or format characters), looked up in the registry and run with `ctx.headless = true` and no UI (`print` writes sanitized text to stdout; `mount`, `copyToClipboard` and `autostart` are absent). Exit 0 ok, 1 error, 2 unknown command or invalid line. With `request.catalog` (host `src/cli.ts --catalog`, core 0.9.0+) it instead prints the command list for shell Tab completion right after the registry is built and returns: `<command>[ <sub>]<TAB><description>` lines from `completionLines` (`src/hints/catalog-lines.ts`: names `[A-Za-z0-9._-]` up to 64, at most 500 commands and 100 subcommands each, description sanitized to 80 characters). No cache file is written. Tests: `tests/headless.test.ts`, `tests/hints/catalog-lines.test.ts`.
 
 ## Tests
 
