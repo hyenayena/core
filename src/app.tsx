@@ -17,7 +17,7 @@ import type {
 } from '../../../src/api.js';
 import {noopLog} from './noop-log.js';
 import type {Registry} from './commands.js';
-import {buildCatalog} from './hints/catalog.js';
+import {buildCatalog, type CatalogSub} from './hints/catalog.js';
 import {sanitizeText} from './hints/sanitize.js';
 import {errorLines} from './error-lines.js';
 import {parseLine} from './parse-line.js';
@@ -25,7 +25,7 @@ import {createCommandBridge, type AgentViewHandle} from './agent/bridge.js';
 import {unknownCommandLines} from './hints/typo.js';
 import {c} from './hints/style.js';
 import {focusMove, isConsoleToggle, isHostKey, isQuitLine} from './view/keys.js';
-import type {ViewCommandHost} from './view/view-commands.js';
+import type {ViewCommandHost, ViewCommandInfo} from './view/view-commands.js';
 import {ViewLayoutContext} from './view/use-view-host.js';
 import {copyToClipboard} from './view/clipboard.js';
 import {suspendTerminal} from './view/suspend.js';
@@ -105,6 +105,14 @@ const autostartCommands = (commands: Command[]): Command[] =>
 			return false;
 		}
 	});
+
+const subInfo = (s: CatalogSub): ViewCommandInfo => ({
+	name: s.name,
+	description: s.description,
+	...(s.usage !== '' && {usage: s.usage}),
+	...(s.aliases.length > 0 && {aliases: [...s.aliases]}),
+	...(s.subs.length > 0 && {subcommands: s.subs.map(subInfo)}),
+});
 
 let nextId = 0;
 let nextMountId = 0;
@@ -296,7 +304,12 @@ export default function App({
 			return true;
 		},
 		listCommands: () =>
-			buildCatalog(registry.commands).commands.map(c => ({name: c.name, description: c.description, ...(c.usage !== undefined && {usage: c.usage})})),
+			buildCatalog(registry.commands).commands.map(c => ({
+				name: c.name,
+				description: c.description,
+				...(c.usage !== undefined && {usage: c.usage}),
+				...(c.subs.length > 0 && {subcommands: c.subs.map(subInfo)}),
+			})),
 		subscribeMouse: fn => {
 			const set = mouseListeners.current[target];
 			if (typeof fn !== 'function' || !openMounts.current.has(mountId) || set.size >= MAX_MOUSE_LISTENERS) return () => {};

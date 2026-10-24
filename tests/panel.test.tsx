@@ -523,14 +523,22 @@ test('Tab on an empty console line closes the console, Tab with hints completes;
 
 test('a view can run a console line: it opens the console and runs it there; unknown words run nothing', async () => {
 	let ran: string[] = [];
-	const say: Command = {name: 'say', description: 'say it', usage: 'say <text>', run: (args, ctx) => {
+	const say: Command = {name: 'say', description: 'say it', usage: 'say <text>', subcommands: [
+		{name: 'loud', description: 'shout', usage: 'say loud <text>', aliases: ['l']},
+	], run: (args, ctx) => {
 		ran = args;
 		ctx.print(`said ${args.join(' ')}`);
 	}};
 	const {h, control} = setup([say]);
 	await h.settle(60);
 	const host = control().host as unknown as {runLine(l: string): boolean; listCommands(): Array<{name: string; description: string; usage?: string}>};
-	assert.ok(host.listCommands().some(c => c.name === 'say' && c.description === 'say it' && c.usage === 'say <text>'));
+	const info = host.listCommands().find(c => c.name === 'say') as unknown;
+	assert.deepEqual(info, {
+		name: 'say',
+		description: 'say it',
+		usage: 'say <text>',
+		subcommands: [{name: 'loud', description: 'shout', usage: 'say loud <text>', aliases: ['l']}],
+	});
 	assert.equal(host.runLine('nope x'), false);
 	assert.equal(host.runLine('say\u0007 x'), false);
 	assert.doesNotMatch(h.lastFrame(), /Console/);
