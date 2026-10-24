@@ -7,7 +7,8 @@ export type Anchor = {id: number; hidden: number; of: number};
 
 export type RowsOf = (line: Line, width: number) => string[];
 
-export type VisibleRow = {key: string; text: string; color?: string | undefined};
+// `id` is the logical line and `row` the row inside it, as wrapped for this width.
+export type VisibleRow = {key: string; id: number; row: number; text: string; color?: string | undefined};
 
 type Position = {i: number; h: number};
 
@@ -97,7 +98,7 @@ export function visibleWindow(
 		const rows = rowsOf(line, width);
 		const end = j === i ? rows.length - h : rows.length;
 		for (let r = end - 1; r >= 0 && out.length < limit; r--) {
-			out.push({key: `${line.id}:${r}`, text: rows[r]!, color: line.color});
+			out.push({key: `${line.id}:${r}`, id: line.id, row: r, text: rows[r]!, color: line.color});
 		}
 	}
 	out.reverse();

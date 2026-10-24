@@ -33,8 +33,12 @@ test('decode maps buttons, release, wheel and modifiers', () => {
 	assert.equal(at(66), undefined);
 	assert.equal(at(67), undefined);
 	assert.equal(at(64, true), undefined);
-	assert.equal(at(32), undefined);
+	// Motion: a drag with a held button; a move with no button, or a "motion release", is dropped.
+	assert.deepEqual(at(32), {kind: 'drag', button: 'left', x: 2, y: 1, shift: false, meta: false, ctrl: false});
+	assert.equal(at(34)?.kind, 'drag');
+	assert.equal(at(32 | 4)?.shift, true);
 	assert.equal(at(35), undefined);
+	assert.equal(at(32, true), undefined);
 	assert.equal(at(96), undefined);
 	assert.equal(at(128), undefined);
 	const mods = at(4 | 8 | 16);

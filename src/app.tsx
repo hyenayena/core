@@ -33,7 +33,19 @@ import {getPrefs, subscribePrefs} from './view/prefs.js';
 import {areaAt, inside, toLocal, wheelDelta, type Rect} from './mouse/hit.js';
 import type {MouseInputEvent} from './mouse/sgr.js';
 import type {ViewMouseEvent, ViewMouseHost} from './mouse/view-mouse.js';
-import {createRowCache, normalizeAnchor, sameAnchor, scrollAnchor, visibleWindow, type Anchor} from './transcript/scroll.js';
+import {createRowCache, normalizeAnchor, sameAnchor, scrollAnchor, visibleWindow, type Anchor, type VisibleRow} from './transcript/scroll.js';
+import {
+	createLayoutCache,
+	emptySpan,
+	lineSpan,
+	markAt,
+	rowCells,
+	selectedText,
+	spanOf,
+	wordSpan,
+	type Mark,
+	type Span,
+} from './transcript/selection.js';
 
 type Line = {id: number; text: string; color?: string; welcome?: boolean};
 
@@ -63,6 +75,10 @@ const SPLIT_MIN_COLUMNS = 60;
 const MAX_MOUSE_LISTENERS = 8;
 // The same cap as a line typed in the console or run by an assistant.
 const RUN_LINE_MAX = 4096;
+// Presses this close in time on one cell count as a double or triple click.
+const MULTI_CLICK_MS = 400;
+// How long "Copied" stays over the transcript.
+const COPY_NOTICE_MS = 2000;
 // How long a console opened for an assistant stays after the last owner ended, unless the user touched it.
 export const AUTO_PANEL_GRACE_MS = 3000;
 
@@ -355,6 +371,39 @@ export default function App({
 
 	const [anchor, setAnchor] = useState<Anchor | null>(null);
 	const rowCache = useRef(createRowCache()).current;
+	const layoutOf = useRef(createLayoutCache(rowCache)).current;
+	// Text selected with the mouse in the transcript; copied when the button is let go.
+	const [selection, setSelectionState] = useState<Span | null>(null);
+	// Mouse events come faster than renders, so the ref holds the truth.
+	const selectionRef = useRef<Span | null>(null);
+	const setSelection = (span: Span | null) => {
+		if (selectionRef.current === span) return;
+		selectionRef.current = span;
+		setSelectionState(span);
+	};
+	const dragRef = useRef<{anchor: Mark; moved: boolean} | null>(null);
+	const clicksRef = useRef({at: 0, x: -1, y: -1, count: 0});
+	const shownRowsRef = useRef<VisibleRow[]>([]);
+	const [copyNotice, setCopyNotice] = useState<string | undefined>(undefined);
+	const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+	useEffect(
+		() => () => {
+			if (noticeTimer.current) clearTimeout(noticeTimer.current);
+		},
+		[],
+	);
+	const showCopyNotice = (text: string) => {
+		if (noticeTimer.current) clearTimeout(noticeTimer.current);
+		setCopyNotice(text);
+		noticeTimer.current = setTimeout(() => {
+			noticeTimer.current = null;
+			if (alive.current) setCopyNotice(undefined);
+		}, COPY_NOTICE_MS);
+	};
+	const clearSelection = () => {
+		dragRef.current = null;
+		setSelection(null);
+	};
 	const linesRef = useRef(lines);
 	linesRef.current = lines;
 	// While the console covers the chat its width is 0; keep wrapping at the last real width.
@@ -468,6 +517,7 @@ export default function App({
 					// A new main view (a new chat) starts on a clean transcript; the welcome hint stays.
 					setLines(prev => prev.filter(l => l.welcome));
 					setAnchor(null);
+					clearSelection();
 					setMain({id, element});
 					setFocus('main');
 				} else {
@@ -478,6 +528,7 @@ export default function App({
 		};
 
 	const clearAll = () => {
+		clearSelection();
 		setLines([]);
 		setPanelLines([]);
 		setAnchor(null);
@@ -573,6 +624,8 @@ export default function App({
 
 
 	useInput((input, key) => {
+		// Any key ends a selection, as in a terminal; the key still does its work.
+		if (selectionRef.current || dragRef.current) clearSelection();
 		const direction = focusMove(key);
 		if (direction) {
 			moveFocus(direction);
@@ -601,7 +654,7 @@ export default function App({
 	// The first listener returning exactly true consumes the event.
 	const dispatchToView = (target: MountTarget, e: MouseInputEvent, rect: Rect): boolean => {
 		const mountId = pending.current[target]?.id;
-		if (mountId === undefined) return false;
+		if (mountId === undefined || e.kind === 'drag') return false;
 		const local = toLocal(rect, e.x, e.y);
 		const event: ViewMouseEvent = Object.freeze({
 			kind: e.kind,
@@ -625,6 +678,79 @@ export default function App({
 		}
 		return false;
 	};
+	// The transcript row and cell under the pointer, clamped to the transcript box.
+	const markUnder = (e: MouseInputEvent, rect: Rect): Mark | undefined => {
+		const shown = shownRowsRef.current;
+		if (shown.length === 0 || rect.height <= 0) return undefined;
+		const y = Math.max(0, Math.min(rect.height - 1, e.y - rect.y));
+		// Rows sit at the bottom of the box and the overflow is clipped at the top.
+		const index = Math.max(0, Math.min(shown.length - 1, shown.length - (rect.height - y)));
+		const row = shown[index]!;
+		const line = linesRef.current.find(x => x.id === row.id);
+		if (!line) return undefined;
+		const x = Math.max(0, Math.min(rect.width, e.x - rect.x));
+		return markAt(row.id, layoutOf(line, widthRef.current), row.row, x);
+	};
+
+	const copySelection = (span: Span) => {
+		const text = selectedText(linesRef.current, span, layoutOf, widthRef.current);
+		if (text === '') return;
+		showCopyNotice(copyToClipboard(stdout, text) ? `Copied ${text.length} character${text.length === 1 ? '' : 's'}` : 'Too long to copy');
+	};
+
+	// Press, drag and release over the transcript select text; true when the event was used for that.
+	const selectionMouse = (e: MouseInputEvent): boolean => {
+		const box = transcriptBoxRef.current;
+		const drag = dragRef.current;
+		if (e.kind === 'drag') {
+			if (!drag || !box) return false;
+			const abs: Rect = measureElement(box);
+			// Past the top or bottom edge the transcript scrolls one row per move.
+			if (e.y < abs.y) scrollBy(1);
+			else if (e.y >= abs.y + abs.height) scrollBy(-1);
+			const head = markUnder(e, abs);
+			if (!head) return true;
+			drag.moved = true;
+			setSelection(spanOf(drag.anchor, head));
+			return true;
+		}
+		if (e.kind === 'release') {
+			if (!drag) return false;
+			dragRef.current = null;
+			const current = selectionRef.current;
+			if (drag.moved && current && !emptySpan(current)) copySelection(current);
+			return true;
+		}
+		if (e.kind !== 'press' || e.button !== 'left' || !box) return false;
+		const abs: Rect = measureElement(box);
+		if (!inside(abs, e.x, e.y)) {
+			clearSelection();
+			return false;
+		}
+		const mark = markUnder(e, abs);
+		if (!mark) {
+			clearSelection();
+			return true;
+		}
+		const now = Date.now();
+		const c = clicksRef.current;
+		const count = now - c.at <= MULTI_CLICK_MS && c.x === e.x && c.y === e.y ? (c.count % 3) + 1 : 1;
+		clicksRef.current = {at: now, x: e.x, y: e.y, count};
+		if (count === 1) {
+			dragRef.current = {anchor: mark, moved: false};
+			setSelection(null);
+			return true;
+		}
+		const line = linesRef.current.find(x => x.id === mark.id);
+		if (!line) return true;
+		const layout = layoutOf(line, widthRef.current);
+		const span = count === 2 ? wordSpan(layout, mark) : lineSpan(layout, mark.id);
+		dragRef.current = null;
+		setSelection(emptySpan(span) ? null : span);
+		if (!emptySpan(span)) copySelection(span);
+		return true;
+	};
+
 	const handleMouse = (e: MouseInputEvent) => {
 		if (!getPrefs().mouse) return;
 		const l = live.current;
@@ -639,6 +765,9 @@ export default function App({
 				live.current = {...l, active: area};
 			}
 		}
+		if (selectionMouse(e)) return;
+		// Views get presses, releases and the wheel; drags only select.
+		if (e.kind === 'drag') return;
 		const hasView = area === 'main' ? l.side : l.hasPanelView;
 		const box = area === 'main' ? mainViewRef.current : consoleBodyRef.current;
 		if (hasView && box) {
@@ -750,7 +879,15 @@ export default function App({
 
 	const view = visibleWindow(lines, anchor, rowCache, width, rows);
 	hintShown.current = view.newer > 0;
-	const transcript = <Transcript rows={view.rows} newer={view.newer} boxRef={transcriptBoxRef} />;
+	shownRowsRef.current = view.rows;
+	const marks = selection
+		? (row: VisibleRow) => {
+				if (row.id < selection.from.id || row.id > selection.to.id) return undefined;
+				const line = lines.find(x => x.id === row.id);
+				return line ? rowCells(row, selection, layoutOf(line, width)) : undefined;
+			}
+		: undefined;
+	const transcript = <Transcript rows={view.rows} newer={view.newer} boxRef={transcriptBoxRef} marks={marks} notice={copyNotice} />;
 
 	return (
 		<Box flexDirection="column" width={columns} height={rows}>

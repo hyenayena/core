@@ -1,5 +1,6 @@
 export type MouseInputEvent = {
-	kind: 'press' | 'release' | 'wheel';
+	// `drag`: the pointer moved while a button is held (button-event tracking, mode 1002).
+	kind: 'press' | 'release' | 'wheel' | 'drag';
 	button: 'left' | 'middle' | 'right' | 'none';
 	wheel?: 'up' | 'down';
 	x: number;
@@ -202,17 +203,22 @@ export function decode(raw: RawMouse, columns: number, rows: number): MouseInput
 	const code = raw.code;
 	if (!Number.isInteger(code) || code < 0) return undefined;
 	const base = code & ~28;
-	if (base & 32 || base >= 128) return undefined;
+	if (base >= 128) return undefined;
 	const x = raw.x - 1;
 	const y = raw.y - 1;
 	if (!Number.isInteger(x) || !Number.isInteger(y) || x < 0 || y < 0 || x >= columns || y >= rows) return undefined;
 	const mods = {shift: (code & 4) !== 0, meta: (code & 8) !== 0, ctrl: (code & 16) !== 0};
 	const low = base & 3;
 	if (base & 64) {
-		if (raw.release || low > 1) return undefined;
+		if (raw.release || low > 1 || base & 32) return undefined;
 		return {kind: 'wheel', button: 'none', wheel: low === 0 ? 'up' : 'down', x, y, ...mods};
 	}
 	const button = (['left', 'middle', 'right', 'none'] as const)[low]!;
+	if (base & 32) {
+		// Motion: reported with a held button only; a move with none held (mode 1003) is dropped.
+		if (raw.release || low === 3) return undefined;
+		return {kind: 'drag', button, x, y, ...mods};
+	}
 	const kind = raw.release || low === 3 ? 'release' : 'press';
 	return {kind, button, x, y, ...mods};
 }

@@ -16,6 +16,40 @@ export function styledCells(text: string): number {
 	return stringCells(text.replace(TOKEN, ''));
 }
 
+/** The text without its escape sequences: what the screen shows, as characters. */
+export function stripStyles(text: string): string {
+	return typeof text === 'string' ? text.replace(TOKEN, '') : '';
+}
+
+/**
+ * The cells [from, to) of a styled row. Every SGR sequence is kept (they take no cells), so the
+ * styles stay right; other escapes are dropped. Ends with a reset when it carried any style.
+ */
+export function sliceStyledCells(text: string, from: number, to: number): string {
+	if (typeof text !== 'string' || text === '' || !(to > from)) return '';
+	let out = '';
+	let cells = 0;
+	let styled = false;
+	let last = 0;
+	const add = (part: string) => {
+		for (const g of graphemes(part)) {
+			const w = cellWidth(g);
+			if (cells >= from && cells + w <= to) out += g;
+			cells += w;
+		}
+	};
+	for (const m of text.matchAll(TOKEN)) {
+		add(text.slice(last, m.index));
+		if (SGR.test(m[0])) {
+			out += m[0];
+			styled = true;
+		}
+		last = m.index + m[0].length;
+	}
+	add(text.slice(last));
+	return styled ? out + RESET : out;
+}
+
 type Piece = {s: string; w: number; space: boolean; sgr: boolean};
 
 function applySgr(active: string[], seq: string): string[] {

@@ -25,8 +25,8 @@ function fakeStdout(isTTY = true) {
 }
 
 test('the mode strings enable and disable click and SGR reporting only', () => {
-	assert.equal(MOUSE_ENABLE, `${ESC}[?1000h${ESC}[?1006h`);
-	assert.equal(MOUSE_DISABLE, `${ESC}[?1006l${ESC}[?1000l`);
+	assert.equal(MOUSE_ENABLE, `${ESC}[?1002h${ESC}[?1006h`);
+	assert.equal(MOUSE_DISABLE, `${ESC}[?1006l${ESC}[?1002l${ESC}[?1000l`);
 });
 
 test('setWanted is idempotent and forwards the state to the proxy', () => {
