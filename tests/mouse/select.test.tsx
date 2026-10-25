@@ -13,7 +13,7 @@ import {createInputProxy} from '../../src/mouse/input.js';
 import {createMouseTerminal} from '../../src/mouse/terminal.js';
 import {CLIPBOARD_DIR_ENV, clipboardSequence, copyToClipboard} from '../../src/view/clipboard.js';
 import {createFakeStdout, createFakeTty, mountHarness} from '../testkit.js';
-import type {Command, MountControl} from '../../../../src/api.js';
+import type {Command, MountControl, PrintOptions} from '../../../../src/api.js';
 
 const ESC = '\x1b';
 // 1-based cells, as the terminal sends them.
@@ -53,7 +53,7 @@ function setup() {
 		assert.ok(at >= 0, `${text} is on the screen`);
 		return at + 1;
 	};
-	return {h, send, rowOf, print: (t: string) => control!.print!(t)};
+	return {h, send, rowOf, print: (t: string, options?: PrintOptions) => control!.print!(t, options)};
 }
 
 const copied = (out: string, text: string) => out.includes(clipboardSequence(text));
@@ -138,4 +138,19 @@ test('the launcher folder gets the copied text as a file', () => {
 	} finally {
 		rmSync(dir, {recursive: true, force: true});
 	}
+});
+
+test('a click on a printed line with an action copies its text, other lines copy nothing', async () => {
+	const {h, send, rowOf, print} = setup();
+	await h.settle(60);
+	print('header row · copy\nbody row one\nfooter row', {actions: [{line: 0, copy: 'the code'}, {line: 9, copy: 'nowhere'}]});
+	await h.settle(40);
+	const body = rowOf('body row one');
+	await send(press(3, body) + release(3, body));
+	assert.equal(h.allOutput().includes(`${ESC}]52;`), false, 'no action on the body row');
+	const header = rowOf('header row');
+	await send(press(3, header) + release(3, header));
+	assert.ok(copied(h.allOutput(), 'the code'), 'copied the action text');
+	assert.match(h.lastFrame(), /Copied 8 characters/);
+	h.unmount();
 });

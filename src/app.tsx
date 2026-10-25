@@ -12,6 +12,7 @@ import type {
 	Logger,
 	MountControl,
 	MountTarget,
+	PrintOptions,
 	UiElement,
 	ViewHost,
 } from '../../../src/api.js';
@@ -28,6 +29,7 @@ import {focusMove, isConsoleToggle, isHostKey, isQuitLine} from './view/keys.js'
 import type {ViewCommandHost, ViewCommandInfo} from './view/view-commands.js';
 import {ViewLayoutContext} from './view/use-view-host.js';
 import {copyToClipboard} from './view/clipboard.js';
+import {actionAt, cleanActions} from './transcript/actions.js';
 import {suspendTerminal} from './view/suspend.js';
 import {DEFAULT_PREFS, getPrefs, setPrefs, subscribePrefs} from './view/prefs.js';
 import {areaAt, inside, toLocal, wheelDelta, type Rect} from './mouse/hit.js';
@@ -440,8 +442,10 @@ export default function App({
 	const hintShown = useRef(false);
 	// A scrolled view always shows the hint, so its top is clamped with the hint row taken.
 	const anchoredViewport = () => Math.max(1, viewportHeight() - (hintShown.current ? 0 : 1));
-	const printMain = (text: string, color?: string) => {
-		setLines(prev => [...prev, {id: nextId++, text, color}].slice(-MAX_LINES));
+	const printMain = (text: string, color?: string, options?: PrintOptions) => {
+		const actions = cleanActions(options?.actions);
+		const render = typeof options?.render === 'function' ? options.render : undefined;
+		setLines(prev => [...prev, {id: nextId++, text, color, ...(actions && {actions}), ...(render && {render})}].slice(-MAX_LINES));
 	};
 	const scrollBy = (delta: number) => {
 		const viewport = anchoredViewport();
@@ -520,7 +524,7 @@ export default function App({
 				openMounts.current.add(id);
 				const control: MountControl = {
 					close: () => settle(target, id),
-					print: target === 'main' ? text => printMain(text) : fallbackPrint,
+					print: target === 'main' ? (text, options) => printMain(text, undefined, options) : fallbackPrint,
 					host: makeHost(target, id),
 					copyToClipboard: text => copyToClipboard(stdout, text),
 				};
@@ -759,6 +763,13 @@ export default function App({
 		const count = now - c.at <= MULTI_CLICK_MS && c.x === e.x && c.y === e.y ? (c.count % 3) + 1 : 1;
 		clicksRef.current = {at: now, x: e.x, y: e.y, count};
 		if (count === 1) {
+			const line = linesRef.current.find(x => x.id === mark.id);
+			const action = line && actionAt(line, layoutOf(line, widthRef.current), mark.offset);
+			if (action) {
+				clearSelection();
+				showCopyNotice(copyToClipboard(stdout, action.copy) ? `Copied ${action.copy.length} character${action.copy.length === 1 ? '' : 's'}` : 'Too long to copy');
+				return true;
+			}
 			dragRef.current = {anchor: mark, moved: false};
 			setSelection(null);
 			return true;

@@ -1,6 +1,25 @@
+import type {PrintAction} from '../../../../src/api.js';
 import {wrapRows} from './wrap.js';
 
-export type Line = {id: number; text: string; color?: string | undefined};
+// `actions`: clicks on its printed lines that copy text; `render`: the text for a width (both `PrintOptions` of the host API).
+export type Line = {
+	id: number;
+	text: string;
+	color?: string | undefined;
+	actions?: readonly PrintAction[] | undefined;
+	render?: ((width: number) => string) | undefined;
+};
+
+/** The text of a line laid out for `width`; a `render` that throws or returns a non-string falls back to `text`. */
+export function lineText(line: Line, width: number): string {
+	if (!line.render) return line.text;
+	try {
+		const text = line.render(width);
+		return typeof text === 'string' ? text : line.text;
+	} catch {
+		return line.text;
+	}
+}
 
 /** The logical line at the bottom of the view, its rows hidden below, and its row count when set. */
 export type Anchor = {id: number; hidden: number; of: number};
@@ -17,7 +36,7 @@ export function createRowCache(): RowsOf {
 	return (line, width) => {
 		const hit = cache.get(line);
 		if (hit && hit.width === width) return hit.rows;
-		const rows = wrapRows(line.text, width);
+		const rows = wrapRows(lineText(line, width), width);
 		cache.set(line, {width, rows});
 		return rows;
 	};

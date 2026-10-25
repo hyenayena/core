@@ -1,5 +1,5 @@
 import {cellWidth, graphemes, stringCells} from '../hints/width.js';
-import type {Line, RowsOf, VisibleRow} from './scroll.js';
+import {lineText, type Line, type RowsOf, type VisibleRow} from './scroll.js';
 import {stripStyles} from './wrap.js';
 
 /**
@@ -20,7 +20,7 @@ export function createLayoutCache(rowsOf: RowsOf): LayoutOf {
 	return (line, width) => {
 		const hit = cache.get(line);
 		if (hit && hit.width === width) return hit.layout;
-		const layout = lineLayout(line.text, rowsOf(line, width));
+		const layout = lineLayout(lineText(line, width), rowsOf(line, width));
 		cache.set(line, {width, layout});
 		return layout;
 	};

@@ -81,3 +81,11 @@ test('styled cell slices keep the styles and end with a reset', () => {
 	assert.equal(sliceStyledCells('plain', 1, 3), 'la');
 	assert.equal(sliceStyledCells('plain', 3, 3), '');
 });
+
+test('selecting a rendered line copies the text shown at that width', () => {
+	const lines: Line[] = [{id: 1, text: 'fallback', render: w => (w < 10 ? 'narrow' : 'wide view')}];
+	const layoutOf = createLayoutCache(createRowCache());
+	const all = (w: number) => selectedText(lines, {from: {id: 1, offset: 0}, to: {id: 1, offset: 99}}, layoutOf, w);
+	assert.equal(all(8), 'narrow');
+	assert.equal(all(20), 'wide view');
+});

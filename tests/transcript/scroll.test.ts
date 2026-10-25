@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createRowCache, normalizeAnchor, scrollAnchor, visibleWindow, type Anchor, type Line} from '../../src/transcript/scroll.js';
+import {createRowCache, lineText, normalizeAnchor, scrollAnchor, visibleWindow, type Anchor, type Line} from '../../src/transcript/scroll.js';
 
 // Width 4: `rows(n)` is a line that wraps to n rows.
 const W = 4;
@@ -120,4 +120,20 @@ test('a taller view at the top moves the anchor to the new top position', () => 
 	const b = normalizeAnchor(lines, a, rowsOf, W, 6)!;
 	assert.equal(b.id, lines[5]!.id);
 	assert.equal(texts(lines, b, 6)[0], `${lines[0]!.id}:0`);
+});
+
+test('a line with render is laid out from its text for each width, once per width', () => {
+	const widths: number[] = [];
+	const l: Line = {id: nextId++, text: 'fallback', render: w => (widths.push(w), 'x'.repeat(w))};
+	const rowsOf = createRowCache();
+	assert.deepEqual(rowsOf(l, 4), ['xxxx']);
+	assert.deepEqual(rowsOf(l, 4), ['xxxx']);
+	assert.deepEqual(rowsOf(l, 6), ['xxxxxx']);
+	assert.deepEqual(widths, [4, 6]);
+});
+
+test('a render that throws or returns no string falls back to the printed text', () => {
+	assert.equal(lineText({id: 1, text: 'plain', render: () => { throw new Error('boom'); }}, 10), 'plain');
+	assert.equal(lineText({id: 2, text: 'plain', render: (() => 42) as unknown as (w: number) => string}, 10), 'plain');
+	assert.equal(lineText({id: 3, text: 'plain'}, 10), 'plain');
 });
