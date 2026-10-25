@@ -106,7 +106,7 @@ export function createRegistry(extra: Command[]): Registry {
 				if (!ctx.mount) throw new Error('"settings" needs an interface that can show views');
 				const [{createElement}, {default: Settings}] = await Promise.all([import('react'), import('./components/Settings.js')]);
 				const tabs = settingsTabs(commands);
-				await ctx.mount(control => createElement(Settings, {tabs, control}), {target: 'panel'});
+				await ctx.mount(control => createElement(Settings, {tabs, control, reload: () => settingsTabs(commands)}), {target: 'panel'});
 			},
 		},
 		{

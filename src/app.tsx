@@ -522,6 +522,7 @@ export default function App({
 					dropMount(target, id);
 					reject(error instanceof Error ? error : new Error(String(error)));
 					return;
+					copyToClipboard: text => copyToClipboard(stdout, text),
 				}
 				pending.current[target] = {id, resolve, reject};
 				log.debug('view mounted', {id});
