@@ -27,3 +27,16 @@ test('formatRunResult explains non-ok statuses and truncation', () => {
 	assert.equal(formatRunResult({...base, status: 'denied', output: '', reason: 'nope'}), 'Command denied: nope');
 	assert.equal(formatRunResult({...base, status: 'timeout', output: 'part', truncated: true}), 'Command timeout\npart\n[output truncated]');
 });
+
+test('formatCommandList names the entries the assistant cannot run in one closing line', () => {
+	const sub = (name: string, policy: 'safe' | 'confirm' | 'deny') => ({name, aliases: [], usage: `claude ${name}`, description: `${name} it`, policy});
+	const text = formatCommandList([
+		{name: 'claude', description: 'Claude', policy: 'deny', subcommands: [sub('ping', 'confirm'), sub('docx', 'deny'), sub('pdf', 'deny')]},
+		{name: 'chat', description: 'Chat', policy: 'deny', subcommands: []},
+		{name: 'one', description: '', policy: 'safe', subcommands: [sub('x', 'deny')]},
+	]);
+	assert.equal(
+		text,
+		'claude [deny] - Claude\n  claude ping [confirm] - ping it\none [safe]\nNot available to the assistant (the user runs them): 2 claude subcommands, chat, 1 one subcommand.',
+	);
+});

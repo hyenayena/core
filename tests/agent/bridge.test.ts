@@ -159,15 +159,19 @@ test('output is sanitised: escapes stripped, in the capture and the tee', async 
 	assert.ok(!s.tee.some(t => t.text.includes('\u001b')));
 });
 
-test('caps: characters and lines set truncated', async () => {
+test('caps: characters and lines set truncated and keep the end', async () => {
 	const big = setup({commands: [say('big', 'safe', 'x'.repeat(MAX_OUTPUT_CHARS + 500))]});
 	const r = await run(big, 'big');
 	assert.equal(r.truncated, true);
-	assert.ok(r.output.length <= MAX_OUTPUT_CHARS);
+	assert.ok(r.output.length <= MAX_OUTPUT_CHARS + 64);
 	const many = setup({commands: [say('many', 'safe', Array.from({length: MAX_OUTPUT_LINES + 50}, (_, i) => `l${i}`).join('\n'))]});
 	const r2 = await run(many, 'many');
 	assert.equal(r2.truncated, true);
-	assert.equal(r2.output.split('\n').length, MAX_OUTPUT_LINES);
+	const out = r2.output.split('\n');
+	assert.equal(out.length, MAX_OUTPUT_LINES + 1);
+	assert.equal(out[0], 'l0');
+	assert.match(out.find(l => l.startsWith('…'))!, /^… \[50 lines, \d+ characters omitted\] …$/);
+	assert.equal(out.at(-1), `l${MAX_OUTPUT_LINES + 49}`);
 	const small = await run(setup({commands: [say('s', 'safe')]}), 's');
 	assert.equal(small.truncated, false);
 });

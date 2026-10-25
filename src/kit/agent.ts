@@ -27,17 +27,30 @@ export const COMMAND_TOOLS: {list_commands: CommandToolSpec; run_command: Comman
 	},
 };
 
-/** Plain text listing for a model; one line per command and per subcommand. */
+/**
+ * Plain text listing for a model; one line per command and per subcommand it may run. Entries the
+ * model cannot run ("deny") cost most of the listing (e.g. every Claude Code skill), so they are only
+ * named in one closing line: the model still knows they exist and that the user runs them.
+ */
 export function formatCommandList(list: readonly CommandInfo[]): string {
 	if (list.length === 0) return 'No commands are available.';
 	const lines: string[] = [];
+	const denied: string[] = [];
 	for (const cmd of list) {
+		const open = cmd.subcommands.filter(sub => sub.policy !== 'deny');
+		const closed = cmd.subcommands.length - open.length;
+		if (cmd.policy === 'deny' && open.length === 0) {
+			denied.push(cmd.name);
+			continue;
+		}
 		lines.push(`${cmd.usage ?? cmd.name} [${cmd.policy}]${cmd.description ? ` - ${cmd.description}` : ''}`);
-		for (const sub of cmd.subcommands) {
+		for (const sub of open) {
 			const aliases = sub.aliases.length > 0 ? ` (${sub.aliases.join(', ')})` : '';
 			lines.push(`  ${sub.usage || sub.name}${aliases} [${sub.policy}]${sub.description ? ` - ${sub.description}` : ''}`);
 		}
+		if (closed > 0) denied.push(`${closed} ${cmd.name} subcommand${closed === 1 ? '' : 's'}`);
 	}
+	if (denied.length > 0) lines.push(`Not available to the assistant (the user runs them): ${denied.join(', ')}.`);
 	return lines.join('\n');
 }
 

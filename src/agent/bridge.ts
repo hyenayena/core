@@ -16,13 +16,13 @@ import {sanitizeBlock, sanitizeText, sanitizeToken} from '../hints/sanitize.js';
 import {unknownCommandLines} from '../hints/typo.js';
 import {c} from '../hints/style.js';
 import {errorLines} from '../error-lines.js';
+import {createCapture} from './capture.js';
 import {parseLine} from '../parse-line.js';
 import {isQuitLine} from '../view/keys.js';
 import type {AgentMode} from '../view/prefs.js';
 
 export const MAX_LINE = 4096;
-export const MAX_OUTPUT_CHARS = 64 * 1024;
-export const MAX_OUTPUT_LINES = 1000;
+export {MAX_OUTPUT_CHARS, MAX_OUTPUT_LINES} from './capture.js';
 export const DEFAULT_TIMEOUT_MS = 60_000;
 export const MIN_TIMEOUT_MS = 1_000;
 export const MAX_TIMEOUT_MS = 600_000;
@@ -104,14 +104,15 @@ export function createCommandBridge(deps: BridgeDeps): CommandBridge {
 		const caller = sanitizeToken(typeof req?.caller === 'string' ? req.caller : '', 40) || 'agent';
 		const meta: {command?: string; subcommand?: string; policy?: AgentPolicy; confirmed?: boolean} = {};
 		let outputChars = 0;
-		let truncated = false;
+		const output = createCapture();
 		let mounted = false;
 		let viewForced = false;
 		let running = false;
 
-		const finish = (status: CommandRunStatus, output = '', reason?: string): CommandRunResult => {
-			outputChars = output.length;
-			const result: CommandRunResult = {status, output, truncated, ms: Math.max(0, now() - started)};
+		const finish = (status: CommandRunStatus, text = '', reason?: string): CommandRunResult => {
+			outputChars = text.length;
+			const truncated = output.truncated;
+			const result: CommandRunResult = {status, output: text, truncated, ms: Math.max(0, now() - started)};
 			if (reason !== undefined) result.reason = reason;
 			if (status !== 'off') {
 				try {
@@ -213,8 +214,6 @@ export function createCommandBridge(deps: BridgeDeps): CommandBridge {
 				deps.beforeRun?.();
 			} catch {}
 			const controller = new AbortController();
-			const lines: string[] = [];
-			let chars = 0;
 			let capturing = true;
 			let ended = false;
 			const views = new Set<AgentViewHandle>();
@@ -229,17 +228,7 @@ export function createCommandBridge(deps: BridgeDeps): CommandBridge {
 			};
 
 			const capture = (text: string) => {
-				for (const line of text.split('\n')) {
-					if (lines.length >= MAX_OUTPUT_LINES || chars >= MAX_OUTPUT_CHARS) {
-						truncated = true;
-						return;
-					}
-					const room = MAX_OUTPUT_CHARS - chars;
-					const piece = line.length > room ? line.slice(0, room) : line;
-					if (piece.length < line.length) truncated = true;
-					lines.push(piece);
-					chars += piece.length + 1;
-				}
+				for (const line of text.split('\n')) output.push(line);
 			};
 
 			const ctx: CommandContext = {
@@ -303,16 +292,16 @@ export function createCommandBridge(deps: BridgeDeps): CommandBridge {
 				// Abort first so code resuming after `await mount` already sees the signal.
 				controller.abort();
 				closeViews(true);
-				return finish(outcome, lines.join('\n'));
+				return finish(outcome, output.text());
 			}
 			if (failure) {
 				const shown = failure.map((text, i) => (i === 0 ? `Error: ${text}` : `  ${text}`));
 				for (const text of shown) safeTee(text, c('red'));
 				capture(shown.join('\n'));
 				capturing = false;
-				return finish('error', lines.join('\n'), failure[0]);
+				return finish('error', output.text(), failure[0]);
 			}
-			return finish('ok', lines.join('\n'));
+			return finish('ok', output.text());
 		} catch (error) {
 			// Nothing above should throw; the bridge still must not.
 			return finish('error', '', sanitizeText(error instanceof Error ? error.message : String(error), 200));
