@@ -444,7 +444,7 @@ test('appearance prefs load, save and notify; broken files give the defaults', a
 	const off = subscribePrefs(() => calls++);
 	setPrefs({titleBar: 'teal', colors: false});
 	assert.equal(calls, 1);
-	assert.deepEqual(JSON.parse(readFileSync(join(dir, 'appearance.json'), 'utf8')), {titleBar: 'teal', colors: false, mouse: true, agentCommands: 'policy'});
+	assert.deepEqual(JSON.parse(readFileSync(join(dir, 'appearance.json'), 'utf8')), {titleBar: 'teal', colors: false, mouse: true, agentCommands: 'policy', panelShare: 0.4});
 	assert.equal(colorEnabled({}), false);
 	writeFileSync(join(dir, 'appearance.json'), '{"titleBar":"pink","colors":"x"}');
 	assert.deepEqual(loadPrefs(dir), DEFAULT_PREFS);

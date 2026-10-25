@@ -82,3 +82,12 @@ test('settings offers an Assistant tab bound to agentCommands', () => {
 	assert.equal(getPrefs().agentCommands, 'ask');
 	setting.set('policy');
 });
+
+test('panelShare keeps a saved value between 0.1 and 0.9 and drops anything else', () => {
+	const dir = tempDir();
+	assert.equal(loadPrefs(dir).panelShare, 0.4);
+	for (const [raw, want] of [['0.25', 0.25], ['0.05', 0.4], ['0.95', 0.4], ['"0.3"', 0.4], ['null', 0.4]] as const) {
+		writeFileSync(join(dir, 'appearance.json'), `{"panelShare":${raw}}`);
+		assert.equal(loadPrefs(dir).panelShare, want, raw);
+	}
+});

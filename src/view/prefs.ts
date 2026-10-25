@@ -5,9 +5,12 @@ export const TITLE_BAR_COLORS = ['olive', 'blue', 'teal', 'gray', 'inverse'] as 
 export type TitleBarColor = (typeof TITLE_BAR_COLORS)[number];
 export const AGENT_MODES = ['policy', 'ask', 'off'] as const;
 export type AgentMode = (typeof AGENT_MODES)[number];
-export type CorePrefs = {titleBar: TitleBarColor; colors: boolean; mouse: boolean; agentCommands: AgentMode};
+/** `panelShare`: the part of the width the side console takes, set by dragging its border. */
+export type CorePrefs = {titleBar: TitleBarColor; colors: boolean; mouse: boolean; agentCommands: AgentMode; panelShare: number};
 
-export const DEFAULT_PREFS: CorePrefs = {titleBar: 'olive', colors: true, mouse: true, agentCommands: 'policy'};
+export const DEFAULT_PREFS: CorePrefs = {titleBar: 'olive', colors: true, mouse: true, agentCommands: 'policy', panelShare: 0.4};
+
+const validShare = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && v >= 0.1 && v <= 0.9;
 
 let prefs: CorePrefs = {...DEFAULT_PREFS};
 let file: string | undefined;
@@ -20,6 +23,7 @@ const clean = (raw: unknown): CorePrefs => {
 		colors: typeof r.colors === 'boolean' ? r.colors : DEFAULT_PREFS.colors,
 		mouse: typeof r.mouse === 'boolean' ? r.mouse : DEFAULT_PREFS.mouse,
 		agentCommands: AGENT_MODES.includes(r.agentCommands as AgentMode) ? (r.agentCommands as AgentMode) : DEFAULT_PREFS.agentCommands,
+		panelShare: validShare(r.panelShare) ? r.panelShare : DEFAULT_PREFS.panelShare,
 	};
 };
 

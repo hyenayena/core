@@ -29,7 +29,7 @@ import type {ViewCommandHost, ViewCommandInfo} from './view/view-commands.js';
 import {ViewLayoutContext} from './view/use-view-host.js';
 import {copyToClipboard} from './view/clipboard.js';
 import {suspendTerminal} from './view/suspend.js';
-import {getPrefs, subscribePrefs} from './view/prefs.js';
+import {DEFAULT_PREFS, getPrefs, setPrefs, subscribePrefs} from './view/prefs.js';
 import {areaAt, inside, toLocal, wheelDelta, type Rect} from './mouse/hit.js';
 import type {MouseInputEvent} from './mouse/sgr.js';
 import type {ViewMouseEvent, ViewMouseHost} from './mouse/view-mouse.js';
@@ -89,12 +89,18 @@ export const PANEL_TITLE = 'Console · Tab close · ⇧← chat';
 export type PanelGeometry = {split: boolean; panelColumns: number; mainColumns: number; panelRows: number};
 
 /** Sizes of the chat and console areas while a main view is shown. */
-export function panelGeometry(columns: number, rows: number, open: boolean): PanelGeometry {
+export function panelGeometry(columns: number, rows: number, open: boolean, share = DEFAULT_PREFS.panelShare): PanelGeometry {
 	const panelRows = Math.max(3, rows);
 	if (!open) return {split: false, panelColumns: 0, mainColumns: columns, panelRows};
 	if (columns < SPLIT_MIN_COLUMNS) return {split: false, panelColumns: columns, mainColumns: 0, panelRows};
-	const panelColumns = Math.min(columns - 30, Math.max(28, Math.round(columns * 0.4)));
+	const panelColumns = Math.min(columns - 30, Math.max(28, Math.round(columns * share)));
 	return {split: true, panelColumns, mainColumns: columns - panelColumns, panelRows};
+}
+
+/** The panel share that puts the console's border at column `x` (0-based), within the panel's limits. */
+export function shareAtBorder(columns: number, x: number): number {
+	const {panelColumns} = panelGeometry(columns, 0, true, (columns - x) / columns);
+	return panelColumns / columns;
 }
 
 const autostartCommands = (commands: Command[]): Command[] =>
@@ -164,7 +170,9 @@ export default function App({
 
 	// With no main view the console owns the screen, as a plain REPL.
 	const side = main !== null;
-	const geo = panelGeometry(columns, rows, panelOpen);
+	// While the console's border is dragged the share lives here; it is saved when the button is let go.
+	const [dragShare, setDragShare] = useState<number | null>(null);
+	const geo = panelGeometry(columns, rows, panelOpen, dragShare ?? getPrefs().panelShare);
 	const consoleShown = !side || panelOpen;
 	const active: Focus = !side ? 'panel' : !panelOpen ? 'main' : focus;
 	const panelInner = side ? Math.max(1, geo.panelColumns - 2) : columns;
@@ -514,6 +522,7 @@ export default function App({
 					close: () => settle(target, id),
 					print: target === 'main' ? text => printMain(text) : fallbackPrint,
 					host: makeHost(target, id),
+					copyToClipboard: text => copyToClipboard(stdout, text),
 				};
 				let element: UiElement;
 				try {
@@ -522,7 +531,6 @@ export default function App({
 					dropMount(target, id);
 					reject(error instanceof Error ? error : new Error(String(error)));
 					return;
-					copyToClipboard: text => copyToClipboard(stdout, text),
 				}
 				pending.current[target] = {id, resolve, reject};
 				log.debug('view mounted', {id});
@@ -765,11 +773,36 @@ export default function App({
 		return true;
 	};
 
+	// Mouse events come faster than renders, so the ref holds the share being dragged.
+	const resizeRef = useRef<number | null>(null);
+	// A press on the console's left border starts a resize; drags move it and the release saves it.
+	const resizeMouse = (e: MouseInputEvent, l: typeof snapshot, panelRect: Rect | undefined): boolean => {
+		if (resizeRef.current !== null) {
+			if (e.kind === 'drag') {
+				resizeRef.current = shareAtBorder(l.columns, e.x);
+				setDragShare(resizeRef.current);
+			} else if (e.kind === 'release') {
+				setPrefs({panelShare: resizeRef.current});
+				resizeRef.current = null;
+				setDragShare(null);
+			}
+			return true;
+		}
+		if (e.kind !== 'press' || e.button !== 'left' || !l.split || !panelRect) return false;
+		if (e.x !== panelRect.x || !inside(panelRect, e.x, e.y)) return false;
+		clearSelection();
+		panelEpoch.current++;
+		resizeRef.current = shareAtBorder(l.columns, e.x);
+		setDragShare(resizeRef.current);
+		return true;
+	};
+
 	const handleMouse = (e: MouseInputEvent) => {
 		if (!getPrefs().mouse) return;
 		const l = live.current;
 		const touchedConsole = (e.kind === 'press' || e.wheel !== undefined) && l.side && l.panelOpen;
 		const panelRect = l.split && panelRef.current ? measureElement(panelRef.current) : undefined;
+		if (resizeMouse(e, l, panelRect)) return;
 		const area = areaAt(e, {side: l.side, panelOpen: l.panelOpen, split: l.split, panelRect});
 		if (touchedConsole && area === 'panel') panelEpoch.current++;
 		if (e.kind === 'press' && e.button === 'left') {
@@ -847,6 +880,7 @@ export default function App({
 		const newer = Math.min(panelScroll, Math.max(0, panelLines.length - panelOutputRows));
 		const outputRows = Math.max(0, panelOutputRows - (newer > 0 ? 1 : 0));
 		const end = Math.max(0, panelLines.length - newer);
+		const resizeColor = dragShare !== null ? c('cyan') : undefined;
 		return (
 			<Box
 				ref={panelRef}
@@ -857,7 +891,8 @@ export default function App({
 				borderTop={false}
 				borderRight={false}
 				borderBottom={false}
-				borderDimColor={active !== 'panel'}
+				borderDimColor={active !== 'panel' && dragShare === null}
+				{...(resizeColor && {borderColor: resizeColor})}
 				paddingLeft={1}
 			>
 				<Box flexShrink={0}>
