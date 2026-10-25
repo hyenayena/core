@@ -5,4 +5,6 @@ export {StatusBar} from './StatusBar.js';
 export {Frame} from './Frame.js';
 export {BrailleBar, type BrailleBarProps} from './BrailleBar.js';
 export {OutputTail, type OutputTailProps} from './OutputTail.js';
+export {SecretInput, type SecretInputProps} from './SecretInput.js';
+export {TextField, type TextFieldProps} from './TextField.js';
 export {colorEnabled} from '../hints/style.js';
