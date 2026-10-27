@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
-import {inputWindow, offsetAtCell} from '../../src/kit/text.js';
+import {inputRowCount, inputWindow, offsetAtCell} from '../../src/kit/text.js';
 
 const FAMILY = '\u{1f468}‍\u{1f469}‍\u{1f467}';
 const at = (text: string, cursor: number, cells: number, rows: number, row: number, cell: number) =>
@@ -33,36 +33,6 @@ test('combining marks belong to their base; a cursor inside a cluster snaps to i
 	assert.equal(row?.cell, 'é');
 });
 
-test('the scrolled cursor row maps from its first shown grapheme; clicks on the cut marker', () => {
-	const text = 'abcdefghijkl';
-	const [row] = inputWindow(text, 12, 9, 1);
-	assert.equal(row?.leftCut, true);
-	assert.equal(row?.before, '…fghijkl');
-	assert.equal(at(text, 12, 9, 1, 0, 0), 5);
-	assert.equal(at(text, 12, 9, 1, 0, 1), 5);
-	assert.equal(at(text, 12, 9, 1, 0, 3), 7);
-	assert.equal(at(text, 12, 9, 1, 0, 40), 12);
-});
-
-test('other rows are cut with a right ellipsis; clicking it gives the first hidden grapheme', () => {
-	const text = 'abcdefghij\nabcdefghijkl';
-	const rows = inputWindow(text, text.length, 9, 2);
-	assert.equal(rows[0]?.before, 'abcdefgh…');
-	assert.equal(rows[0]?.rightCut, true);
-	assert.equal(rows[0]?.cell, null);
-	assert.equal(at(text, text.length, 9, 2, 0, 3), 3);
-	assert.equal(at(text, text.length, 9, 2, 0, 8), 8);
-	assert.equal(at(text, text.length, 9, 2, 0, 40), 10);
-});
-
-test('wide characters in a cut non-cursor row', () => {
-	const text = '日本語日本語\nx';
-	const rows = inputWindow(text, text.length, 7, 2);
-	assert.equal(rows[0]?.before, '日本語…');
-	assert.equal(at(text, text.length, 7, 2, 0, 6), 3);
-	assert.equal(at(text, text.length, 7, 2, 0, 7), 6);
-});
-
 test('with the first lines scrolled off, row 0 is the first shown line', () => {
 	const text = 'a\nb\nc\nd';
 	assert.deepEqual(inputWindow(text, 7, 78, 2).map(r => r.before), ['c', 'd']);
@@ -89,4 +59,45 @@ test('an empty last line and a cursor at the end of text', () => {
 	const rows = inputWindow('ab\n', 3, 78, 3);
 	assert.deepEqual(rows.map(r => r.cell), [null, ' ']);
 	assert.equal(at('ab\n', 3, 78, 3, 1, 4), 3);
+});
+
+test('a long line wraps after the last space that fits, one cell short of the width', () => {
+	const text = 'hello world again';
+	const rows = inputWindow(text, 0, 9, 5);
+	assert.deepEqual(rows.map(r => r.before + (r.cell ?? '') + r.after), ['hello ', 'world ', 'again']);
+	assert.deepEqual(rows.map(r => r.offset), [0, 6, 12]);
+	assert.equal(inputRowCount(text, 9), 3);
+	assert.ok(rows.every(r => !r.leftCut && !r.rightCut));
+});
+
+test('a word longer than a row is cut by cells; wide characters never split', () => {
+	assert.deepEqual(inputWindow('abcdefghijkl', 0, 5, 5).map(r => r.before + (r.cell ?? '') + r.after), ['abcd', 'efgh', 'ijkl']);
+	assert.deepEqual(inputWindow('日本語日本', 0, 6, 5).map(r => r.before + (r.cell ?? '') + r.after), ['日本', '語日', '本']);
+});
+
+test('the whole typed text is visible: nothing is replaced with an ellipsis', () => {
+	const text = 'x'.repeat(30) + '\n' + 'y'.repeat(30);
+	const rows = inputWindow(text, text.length, 11, 10);
+	assert.equal(rows.map(r => r.before + (r.cell ?? '') + r.after).join('').replace(/ $/, ''), 'x'.repeat(30) + 'y'.repeat(30));
+	assert.ok(!rows.some(r => r.before.includes('…')));
+});
+
+test('the cursor at a wrap point sits at the start of the next row; at the line end after the text', () => {
+	const text = 'abcdefgh';
+	assert.deepEqual(inputWindow(text, 4, 5, 5).map(r => r.cell), [null, 'e']);
+	assert.deepEqual(inputWindow(text, 8, 5, 5).map(r => [r.before, r.cell]), [['abcd', null], ['efgh', ' ']]);
+});
+
+test('the window follows the cursor over wrapped rows', () => {
+	const text = 'aaaa bbbb cccc dddd';
+	assert.deepEqual(inputWindow(text, text.length, 6, 2).map(r => r.offset), [10, 15]);
+	assert.deepEqual(inputWindow(text, 0, 6, 2).map(r => r.offset), [0, 5]);
+});
+
+test('clicks on wrapped rows map into that row; past its end to its last grapheme', () => {
+	const text = 'hello world';
+	assert.equal(at(text, 0, 9, 5, 1, 0), 6);
+	assert.equal(at(text, 0, 9, 5, 1, 3), 9);
+	assert.equal(at(text, 0, 9, 5, 1, 40), 11);
+	assert.equal(at(text, 0, 9, 5, 0, 40), 5);
 });

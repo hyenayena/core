@@ -5,7 +5,8 @@ export {wrapRows, wrapLines, styledCells} from '../transcript/wrap.js';
 export {tailRows, type TailRows} from './tail.js';
 export {windowLine, indexAtCell, type Windowed} from '../hints/viewport.js';
 export {windowStart} from './window.js';
-export {inputWindow, offsetAtCell, type InputWindowRow} from './input-window.js';
+export {inputRowCount, inputWindow, offsetAtCell, type InputWindowRow} from './input-window.js';
+export {hangingRows} from './hanging.js';
 export {COMMAND_TOOLS, formatCommandList, formatRunResult, type CommandToolSpec} from './agent.js';
 export type {Tone, FrameRow, PickerItem} from './types.js';
 export {

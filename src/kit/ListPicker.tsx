@@ -6,6 +6,7 @@ import {stringCells, truncateCells} from '../hints/width.js';
 import {useViewHost} from '../view/use-view-host.js';
 import type {PickerItem} from './types.js';
 import {windowStart} from './window.js';
+import {hangingRows} from './hanging.js';
 
 export interface ListPickerProps {
 	title: string;
@@ -49,8 +50,14 @@ export function ListPicker({title, empty, action, items, scrub = identity, onPic
 	const clean = (s: string) => sanitizeText(scrub(s), 200);
 	const width = Math.max(1, columns - 1);
 	const budget = Math.max(1, rows - 2);
-	const start = windowStart(items.length, budget, cursor);
-	const visible = items.slice(start, start + budget);
+	const at = items[cursor];
+	// The selected item is shown in full over as many rows as it needs; the others stay one row each.
+	const selectedRows = at
+		? hangingRows('› ', `${clean(at.label)}${at.meta ? ` · ${clean(at.meta)}` : ''}`, width).slice(0, budget)
+		: [];
+	const itemBudget = Math.max(1, budget - Math.max(0, selectedRows.length - 1));
+	const start = windowStart(items.length, itemBudget, cursor);
+	const visible = items.slice(start, start + itemBudget);
 
 	return (
 		<Box flexDirection="column">
@@ -61,6 +68,17 @@ export function ListPicker({title, empty, action, items, scrub = identity, onPic
 			</Box>
 			{visible.map((item, i) => {
 				const selected = start + i === cursor;
+				if (selected && selectedRows.length > 1) {
+					return (
+						<Box key={item.id} flexDirection="column" flexShrink={0}>
+							{selectedRows.map((text, r) => (
+								<Text key={r} wrap="truncate-end" inverse={focused}>
+									{text}
+								</Text>
+							))}
+						</Box>
+					);
+				}
 				const meta = item.meta ? ` · ${clean(item.meta)}` : '';
 				const label = truncateCells(`${selected ? '›' : ' '} ${clean(item.label)}`, Math.max(1, width - stringCells(meta)));
 				return (
