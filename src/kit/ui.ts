@@ -7,4 +7,5 @@ export {BrailleBar, type BrailleBarProps} from './BrailleBar.js';
 export {OutputTail, type OutputTailProps} from './OutputTail.js';
 export {SecretInput, type SecretInputProps} from './SecretInput.js';
 export {TextField, type TextFieldProps} from './TextField.js';
+export {Form, type FormProps, type FormField, type FormButton, type FormValue} from './Form.js';
 export {colorEnabled} from '../hints/style.js';
