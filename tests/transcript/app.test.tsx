@@ -135,7 +135,8 @@ test('trimming past the cap while at the top shows the oldest remaining line at 
 	for (let i = 0; i < 20; i++) s.print(`n-${i}`);
 	await s.h.settle(80);
 	await s.send(PG_UP.repeat(4));
-	assert.match(s.transcript()[0]!, /^yena — /, 'the welcome line is the first row');
+	assert.equal(s.transcript()[0], 'n-0', 'the first print of the view sits above the welcome line');
+	assert.match(s.transcript()[1]!, /^press Tab /, 'the welcome line follows it');
 	for (let i = 20; i < 20 + MAX_LINES; i++) s.print(`n-${i}`);
 	await s.h.settle(300);
 	assert.equal(s.transcript()[0], 'n-20');

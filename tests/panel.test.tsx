@@ -75,6 +75,35 @@ test('an autostarted main view takes the screen and the focus; the console is cl
 	h.unmount();
 });
 
+function Printing({control}: {control: MountControl}) {
+	useEffect(() => {
+		control.print!('BANNER-TOP');
+		control.print!('after-hint');
+	}, [control]);
+	return <Text>CHAT</Text>;
+}
+
+test('the first print of a new main view goes above the welcome hint', async () => {
+	const commands: Command[] = [
+		{
+			name: 'chat',
+			description: 'open the chat',
+			autostart: true,
+			run: async (_a, ctx) => {
+				await ctx.mount!(c => <Printing control={c} />);
+			},
+		},
+	];
+	const h = mountHarness(<App registry={createRegistry(commands)} />, {columns: 100, rows: 30});
+	await h.settle(60);
+	const frame = h.lastFrame();
+	const banner = frame.indexOf('BANNER-TOP');
+	const hint = frame.indexOf('press Tab (or Ctrl+T) to open the console');
+	const after = frame.indexOf('after-hint');
+	assert.ok(banner >= 0 && hint > banner && after > hint, 'banner, then the hint, then later prints');
+	h.unmount();
+});
+
 test('Ctrl+T toggles the console beside the chat and moves the focus with it', async () => {
 	const {h, type} = setup();
 	await h.settle(60);

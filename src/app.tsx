@@ -85,7 +85,7 @@ const COPY_NOTICE_MS = 2000;
 export const AUTO_PANEL_GRACE_MS = 3000;
 
 export const WELCOME = 'yena — type "help" for the list of commands';
-export const WELCOME_WITH_VIEW = 'yena — press Tab (or Ctrl+T) to open the console; type "help" there for the list of commands';
+export const WELCOME_WITH_VIEW = 'press Tab (or Ctrl+T) to open the console';
 export const PANEL_TITLE = 'Console · Tab close · ⇧← chat';
 
 export type PanelGeometry = {split: boolean; panelColumns: number; mainColumns: number; panelRows: number};
@@ -151,8 +151,9 @@ export default function App({
 	const [lines, setLines] = useState<Line[]>(() => [
 		{
 			id: nextId++,
-			text: autostartCommands(registry.commands).length > 0 ? WELCOME_WITH_VIEW : WELCOME,
-			color: c('green'),
+			...(autostartCommands(registry.commands).length > 0
+				? {text: WELCOME_WITH_VIEW, color: c('gray')}
+				: {text: WELCOME, color: c('green')}),
 			welcome: true,
 		},
 	]);
@@ -442,10 +443,21 @@ export default function App({
 	const hintShown = useRef(false);
 	// A scrolled view always shows the hint, so its top is clamped with the hint row taken.
 	const anchoredViewport = () => Math.max(1, viewportHeight() - (hintShown.current ? 0 : 1));
+	// Set when a main view mounts: its first print (the banner) goes above the welcome hint, so the hint reads under it.
+	const welcomeBelowNext = useRef(false);
 	const printMain = (text: string, color?: string, options?: PrintOptions) => {
 		const actions = cleanActions(options?.actions);
 		const render = typeof options?.render === 'function' ? options.render : undefined;
-		setLines(prev => [...prev, {id: nextId++, text, color, ...(actions && {actions}), ...(render && {render})}].slice(-MAX_LINES));
+		const line = {id: nextId++, text, color, ...(actions && {actions}), ...(render && {render})};
+		if (!welcomeBelowNext.current) {
+			setLines(prev => [...prev, line].slice(-MAX_LINES));
+			return;
+		}
+		welcomeBelowNext.current = false;
+		setLines(prev => {
+			const at = prev.findIndex(l => l.welcome);
+			return (at < 0 ? [...prev, line] : [...prev.slice(0, at), line, ...prev.slice(at)]).slice(-MAX_LINES);
+		});
 	};
 	const scrollBy = (delta: number) => {
 		const viewport = anchoredViewport();
@@ -542,6 +554,7 @@ export default function App({
 					onMain();
 					// A new main view (a new chat) starts on a clean transcript; the welcome hint stays.
 					setLines(prev => prev.filter(l => l.welcome));
+					welcomeBelowNext.current = true;
 					setAnchor(null);
 					clearSelection();
 					setMain({id, element});
