@@ -1,4 +1,5 @@
-import type {PrintAction} from '../../../../src/api.js';
+import type {PrintAction, RenderedPrint} from '../../../../src/api.js';
+import {cleanActions} from './actions.js';
 import {wrapRows} from './wrap.js';
 
 // `actions`: clicks on its printed lines that copy text; `render`: the text for a width (both `PrintOptions` of the host API).
@@ -7,19 +8,37 @@ export type Line = {
 	text: string;
 	color?: string | undefined;
 	actions?: readonly PrintAction[] | undefined;
-	render?: ((width: number) => string) | undefined;
+	render?: ((width: number) => string | RenderedPrint) | undefined;
 };
 
-/** The text of a line laid out for `width`; a `render` that throws or returns a non-string falls back to `text`. */
-export function lineText(line: Line, width: number): string {
-	if (!line.render) return line.text;
+type Layout = {text: string; actions?: readonly PrintAction[] | undefined};
+
+// One layout per line: rows, selection and clicks all ask for it at the same width.
+const layouts = new WeakMap<Line, {width: number; layout: Layout}>();
+
+/**
+ * The text and actions of a line laid out for `width`. A `render` that throws or returns neither a string
+ * nor `{text}` falls back to `text` and `actions`; a string result keeps `actions`.
+ */
+export function renderedLine(line: Line, width: number): Layout {
+	if (!line.render) return line;
+	const hit = layouts.get(line);
+	if (hit && hit.width === width) return hit.layout;
+	let layout: Layout = line;
 	try {
-		const text = line.render(width);
-		return typeof text === 'string' ? text : line.text;
+		const out: unknown = line.render(width);
+		if (typeof out === 'string') layout = {text: out, actions: line.actions};
+		else if (typeof out === 'object' && out !== null && typeof (out as RenderedPrint).text === 'string') {
+			layout = {text: (out as RenderedPrint).text, actions: cleanActions((out as RenderedPrint).actions)};
+		}
 	} catch {
-		return line.text;
+		layout = line;
 	}
+	layouts.set(line, {width, layout});
+	return layout;
 }
+
+export const lineText = (line: Line, width: number): string => renderedLine(line, width).text;
 
 /** The logical line at the bottom of the view, its rows hidden below, and its row count when set. */
 export type Anchor = {id: number; hidden: number; of: number};

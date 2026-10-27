@@ -1,5 +1,4 @@
 import type {PrintAction} from '../../../../src/api.js';
-import type {Line} from './scroll.js';
 import type {LineLayout} from './selection.js';
 
 export const MAX_ACTIONS = 200;
@@ -17,8 +16,8 @@ export function cleanActions(actions: unknown): PrintAction[] | undefined {
 	return out.length > 0 ? out : undefined;
 }
 
-/** The action of the printed line that holds `offset` of the line's plain text. */
-export function actionAt(line: Line, layout: LineLayout, offset: number): PrintAction | undefined {
+/** The action of the printed line that holds `offset` of the line's plain text; pass the line's layout for the width shown (`renderedLine`). */
+export function actionAt(line: {actions?: readonly PrintAction[] | undefined}, layout: LineLayout, offset: number): PrintAction | undefined {
 	if (!line.actions) return undefined;
 	let index = 0;
 	const end = Math.min(offset, layout.plain.length);

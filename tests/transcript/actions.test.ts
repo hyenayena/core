@@ -21,5 +21,5 @@ test('actionAt finds the action of the printed line under the offset', () => {
 	assert.equal(actionAt(line, layout, 2)?.copy, 'A');
 	assert.equal(actionAt(line, layout, 6), undefined);
 	assert.equal(actionAt(line, layout, 11)?.copy, 'C');
-	assert.equal(actionAt({id: 2, text}, layout, 0), undefined);
+	assert.equal(actionAt({}, layout, 0), undefined);
 });

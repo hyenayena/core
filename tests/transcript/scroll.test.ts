@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createRowCache, lineText, normalizeAnchor, scrollAnchor, visibleWindow, type Anchor, type Line} from '../../src/transcript/scroll.js';
+import {createRowCache, lineText, renderedLine, normalizeAnchor, scrollAnchor, visibleWindow, type Anchor, type Line} from '../../src/transcript/scroll.js';
 
 // Width 4: `rows(n)` is a line that wraps to n rows.
 const W = 4;
@@ -136,4 +136,26 @@ test('a render that throws or returns no string falls back to the printed text',
 	assert.equal(lineText({id: 1, text: 'plain', render: () => { throw new Error('boom'); }}, 10), 'plain');
 	assert.equal(lineText({id: 2, text: 'plain', render: (() => 42) as unknown as (w: number) => string}, 10), 'plain');
 	assert.equal(lineText({id: 3, text: 'plain'}, 10), 'plain');
+	assert.equal(lineText({id: 4, text: 'plain', render: (() => ({text: 7})) as unknown as (w: number) => string}, 10), 'plain');
+});
+
+test('a render that returns text and actions replaces both for that width', () => {
+	const printed = [{line: 0, copy: 'old'}];
+	const l: Line = {id: nextId++, text: 'a\nb', actions: printed, render: w => ({text: `w${w}\nx\ny`, actions: [{line: 2, copy: `at ${w}`}, {line: -1, copy: 'bad'}]})};
+	assert.deepEqual(renderedLine(l, 5), {text: 'w5\nx\ny', actions: [{line: 2, copy: 'at 5'}]});
+	assert.deepEqual(renderedLine(l, 9).actions, [{line: 2, copy: 'at 9'}]);
+	assert.equal(renderedLine({id: nextId++, text: 't', render: () => ({text: 'u'})}, 5).actions, undefined);
+	assert.equal(renderedLine({id: nextId++, text: 't', actions: printed, render: () => 'u'}, 5).actions, printed);
+	assert.equal(renderedLine({id: nextId++, text: 't', actions: printed}, 5).actions, printed);
+});
+
+test('a line is rendered once per width however often it is asked for', () => {
+	let calls = 0;
+	const l: Line = {id: nextId++, text: 't', render: w => (calls++, `r${w}`)};
+	lineText(l, 3);
+	renderedLine(l, 3);
+	createRowCache()(l, 3);
+	assert.equal(calls, 1);
+	lineText(l, 4);
+	assert.equal(calls, 2);
 });

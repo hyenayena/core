@@ -36,7 +36,7 @@ import {DEFAULT_PREFS, getPrefs, setPrefs, subscribePrefs} from './view/prefs.js
 import {areaAt, inside, toLocal, wheelDelta, type Rect} from './mouse/hit.js';
 import type {MouseInputEvent} from './mouse/sgr.js';
 import type {ViewMouseEvent, ViewMouseHost} from './mouse/view-mouse.js';
-import {createRowCache, normalizeAnchor, sameAnchor, scrollAnchor, visibleWindow, type Anchor, type VisibleRow} from './transcript/scroll.js';
+import {createRowCache, normalizeAnchor, renderedLine, sameAnchor, scrollAnchor, visibleWindow, type Anchor, type VisibleRow} from './transcript/scroll.js';
 import {
 	createLayoutCache,
 	emptySpan,
@@ -791,7 +791,7 @@ export default function App({
 		clicksRef.current = {at: now, x: e.x, y: e.y, count};
 		if (count === 1) {
 			const line = linesRef.current.find(x => x.id === mark.id);
-			const action = line && actionAt(line, layoutOf(line, widthRef.current), mark.offset);
+			const action = line && actionAt(renderedLine(line, widthRef.current), layoutOf(line, widthRef.current), mark.offset);
 			if (action) {
 				clearSelection();
 				showCopyNotice(copyToClipboard(stdout, action.copy) ? `Copied ${action.copy.length} character${action.copy.length === 1 ? '' : 's'}` : 'Too long to copy');
