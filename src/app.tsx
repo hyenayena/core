@@ -187,7 +187,7 @@ export default function App({
 	// Hosts are created once per view, so they read the latest layout through this ref.
 	// Without a chat the console view has the screen, less one row so Ink never clears it.
 	const panelViewRows = side ? Math.max(1, geo.panelRows - 1) : Math.max(1, rows - 1);
-	const panelOutputRows = Math.max(0, geo.panelRows - 3);
+	const panelOutputRows = Math.max(0, geo.panelRows - 4);
 	const snapshot = {
 		columns,
 		active,
@@ -473,17 +473,28 @@ export default function App({
 	const [panelScroll, setPanelScroll] = useState(0);
 	const panelScrollRef = useRef(0);
 	panelScrollRef.current = panelScroll;
-	const panelLinesRef = useRef(panelLines);
-	panelLinesRef.current = panelLines;
+	// Panel lines wrap instead of being cut, and the panel scroll counts the wrapped rows.
+	// The panel ends at the terminal's edge, so its rows keep the last column empty (see widthRef).
+	const panelRowCache = useRef(createRowCache()).current;
+	const panelWidth = Math.max(1, panelInner - 1);
+	const panelRows = useMemo(
+		() => panelLines.flatMap(line => panelRowCache(line, panelWidth).map((text, row) => ({key: `${line.id}:${row}`, text, color: line.color}))),
+		[panelLines, panelWidth],
+	);
+	const panelRowsRef = useRef(panelRows);
+	panelRowsRef.current = panelRows;
 	const printPanel = (text: string, color?: string) => {
-		// One panel line per row, so the panel scroll can keep counting lines.
-		const parts = text.split(/\r?\n/);
-		setPanelLines(prev => [...prev, ...parts.map(part => ({id: nextId++, text: part, color}))].slice(-MAX_PANEL_LINES));
-		if (panelScrollRef.current > 0) setPanelScroll(s => Math.min(s + parts.length, MAX_PANEL_LINES - 1));
+		const added = text.split(/\r?\n/).map(part => ({id: nextId++, text: part, color}));
+		setPanelLines(prev => [...prev, ...added].slice(-MAX_PANEL_LINES));
+		if (panelScrollRef.current > 0) {
+			const width = Math.max(1, live.current.panelInner - 1);
+			const rows = added.reduce((n, line) => n + panelRowCache(line, width).length, 0);
+			setPanelScroll(s => s + rows);
+		}
 	};
 	const panelScrollBy = (delta: number) =>
 		setPanelScroll(s =>
-			Math.max(0, Math.min(Math.max(0, panelLinesRef.current.length - live.current.panelOutputRows), s + delta)),
+			Math.max(0, Math.min(Math.max(0, panelRowsRef.current.length - live.current.panelOutputRows), s + delta)),
 		);
 	const sideRef = useRef(side);
 	sideRef.current = side;
@@ -882,7 +893,7 @@ export default function App({
 				onInterrupt={exit}
 				mouseRef={promptMouse}
 				columns={inner}
-				{...(height !== undefined && {rows: height})}
+				{...(height !== undefined && {rows: height - 1})}
 				active={active === 'panel' && !panelView}
 				isHostKey={isHostKey}
 				{...(side && {onIdleTab: () => void togglePanel()})}
@@ -895,7 +906,7 @@ export default function App({
 		return (
 			<>
 				{view}
-				<Box key="prompt" flexDirection="column" display={panelView ? 'none' : 'flex'}>
+				<Box key="prompt" flexDirection="column" paddingBottom={height !== undefined ? 1 : 0} display={panelView ? 'none' : 'flex'}>
 					{prompt}
 				</Box>
 			</>
@@ -904,15 +915,11 @@ export default function App({
 
 	const panel = () => {
 		const height = geo.panelRows;
-		const newer = Math.min(panelScroll, Math.max(0, panelLines.length - panelOutputRows));
+		const newer = Math.min(panelScroll, Math.max(0, panelRows.length - panelOutputRows));
 		const outputRows = Math.max(0, panelOutputRows - (newer > 0 ? 1 : 0));
-		const end = Math.max(0, panelLines.length - newer);
+		const end = Math.max(0, panelRows.length - newer);
 		const resizeColor = dragShare !== null ? c('cyan') : undefined;
-		// The panel ends at the terminal's edge; its rows keep the last column empty (see widthRef).
-		const fit = (text: string) => {
-			const max = Math.max(1, panelInner - 1);
-			return styledCells(text) <= max ? text : sliceStyledCells(text, 0, max - 1) + '…';
-		};
+		const fit = (text: string) => (styledCells(text) <= panelWidth ? text : sliceStyledCells(text, 0, panelWidth - 1) + '…');
 		return (
 			<Box
 				ref={panelRef}
@@ -935,10 +942,10 @@ export default function App({
 				{/* A console view gets the whole panel; the output only fills what the prompt leaves */}
 				{!panelView && (
 					<Box flexDirection="column" flexGrow={1} flexShrink={1} justifyContent="flex-end" overflow="hidden">
-						{panelLines.slice(Math.max(0, end - outputRows), end).map(line => (
-							<Box key={line.id} flexShrink={0}>
-								<Text color={line.color} wrap="truncate-end">
-									{fit(line.text)}
+						{panelRows.slice(Math.max(0, end - outputRows), end).map(row => (
+							<Box key={row.key} flexShrink={0}>
+								<Text color={row.color} wrap="truncate-end">
+									{row.text === '' ? ' ' : row.text}
 								</Text>
 							</Box>
 						))}
