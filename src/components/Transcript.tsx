@@ -2,7 +2,7 @@ import React, {type Ref} from 'react';
 import {Box, Text, type DOMElement} from 'ink';
 import type {VisibleRow} from '../transcript/scroll.js';
 import {sliceStyledCells, stripStyles} from '../transcript/wrap.js';
-import {sliceCells} from '../hints/width.js';
+import {sliceCells, truncateCells} from '../hints/width.js';
 
 export const scrollHint = (newer: number, keys = 'PgDn or Shift+↓') =>
 	`↓ ${newer} newer line${newer === 1 ? '' : 's'}${keys === '' ? '' : ` · ${keys}`}`;
@@ -40,12 +40,15 @@ export default function Transcript({
 	boxRef,
 	marks,
 	notice,
+	columns,
 }: {
 	rows: VisibleRow[];
 	newer: number;
 	boxRef?: Ref<DOMElement>;
 	marks?: RowMarks | undefined;
 	notice?: string | undefined;
+	/** Cells the scroll hint may take. */
+	columns?: number | undefined;
 }) {
 	return (
 		<>
@@ -64,7 +67,7 @@ export default function Transcript({
 			{newer > 0 && (
 				<Box flexShrink={0}>
 					<Text dimColor wrap="truncate-end">
-						{scrollHint(newer)}
+						{columns === undefined ? scrollHint(newer) : truncateCells(scrollHint(newer), columns)}
 					</Text>
 				</Box>
 			)}

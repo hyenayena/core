@@ -7,6 +7,7 @@ import {windowStart} from '../src/kit/window.js';
 import {createRegistry} from '../src/commands.js';
 import {createFakeStdout, mountHarness} from './testkit.js';
 import {useViewHost} from '../src/view/use-view-host.js';
+import {stringCells} from '../src/hints/width.js';
 import type {Command, MountControl, Setting} from '../../../src/api.js';
 
 const LEFT = '\x1b[D';
@@ -609,5 +610,48 @@ test('a mounted view gets the new width in the same frame the console opens and 
 		for (const f of drawn) assert.match(f, width, 'no frame at the old width');
 		if (key === '\x14' && width.source.includes('idle')) assert.notEqual(Number(/VIEW w(\d+)/.exec(drawn[0]!)?.[1]), 100);
 	}
+	h.unmount();
+});
+
+const CSI = new RegExp(String.fromCharCode(27) + '\\[[0-9;?]*[A-Za-z]', 'g');
+const widestRow = (frame: string) => Math.max(...frame.replace(CSI, '').split('\n').map(stringCells));
+const LONG_USAGE = 'Usage: claude auth <status|accounts|login|key|order|use|remove|logout>';
+
+test('console rows beside a view keep the last terminal column empty, so the prompt stays on screen', async () => {
+	const long: Command = {
+		name: 'long',
+		description: 'fails with a long usage',
+		run: async (_a, ctx) => {
+			ctx.print(`plain ${'x'.repeat(120)}`);
+			ctx.print(`\x1b[1mstyled\x1b[0m ${'y'.repeat(120)}`);
+			throw new Error(LONG_USAGE);
+		},
+	};
+	const {h, type} = setup([long], {columns: 100, rows: 20});
+	await h.settle(60);
+	await type('\x14');
+	for (let i = 0; i < 3; i++) {
+		await type('long');
+		await type(ENTER);
+	}
+	await type('abc');
+	const frame = h.lastFrame();
+	assert.match(frame, /Error: Usage: claude auth/);
+	assert.match(frame, /> abc/);
+	assert.ok(widestRow(frame) <= 99, `a row reaches the last column: ${widestRow(frame)}`);
+	h.unmount();
+});
+
+test('the full-screen console wraps its scrollback short of the last terminal column', async () => {
+	const long: Command = {name: 'long', description: 'prints a long line', run: async (_a, ctx) => ctx.print('z'.repeat(250))};
+	const h = mountHarness(<App registry={createRegistry([long])} />, {columns: 80, rows: 20});
+	await h.settle(60);
+	h.press('long');
+	await h.settle(80);
+	h.press(ENTER);
+	await h.settle(120);
+	const frame = h.lastFrame();
+	assert.match(frame, /zzz/);
+	assert.ok(widestRow(frame) <= 79, `a row reaches the last column: ${widestRow(frame)}`);
 	h.unmount();
 });

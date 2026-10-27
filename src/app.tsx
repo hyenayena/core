@@ -20,6 +20,7 @@ import {noopLog} from './noop-log.js';
 import type {Registry} from './commands.js';
 import {buildCatalog, type CatalogSub} from './hints/catalog.js';
 import {sanitizeText} from './hints/sanitize.js';
+import {sliceStyledCells, styledCells} from './transcript/wrap.js';
 import {errorLines} from './error-lines.js';
 import {parseLine} from './parse-line.js';
 import {createCommandBridge, type AgentViewHandle} from './agent/bridge.js';
@@ -431,9 +432,11 @@ export default function App({
 	const linesRef = useRef(lines);
 	linesRef.current = lines;
 	// While the console covers the chat its width is 0; keep wrapping at the last real width.
-	const widthRef = useRef(Math.max(1, columns));
+	// The last column stays empty: a row that reaches the terminal's edge wraps there when the
+	// terminal draws a glyph wider than measured (e.g. "…"), and the frame then scrolls by a row.
+	const widthRef = useRef(Math.max(1, columns - 1));
 	const shownWidth = side ? geo.mainColumns : columns;
-	if (shownWidth > 0) widthRef.current = shownWidth;
+	if (shownWidth > 0) widthRef.current = Math.max(1, shownWidth - 1);
 	const width = widthRef.current;
 	const transcriptBoxRef = useRef<DOMElement>(null);
 	const viewportHeight = () => {
@@ -905,6 +908,11 @@ export default function App({
 		const outputRows = Math.max(0, panelOutputRows - (newer > 0 ? 1 : 0));
 		const end = Math.max(0, panelLines.length - newer);
 		const resizeColor = dragShare !== null ? c('cyan') : undefined;
+		// The panel ends at the terminal's edge; its rows keep the last column empty (see widthRef).
+		const fit = (text: string) => {
+			const max = Math.max(1, panelInner - 1);
+			return styledCells(text) <= max ? text : sliceStyledCells(text, 0, max - 1) + '…';
+		};
 		return (
 			<Box
 				ref={panelRef}
@@ -921,7 +929,7 @@ export default function App({
 			>
 				<Box flexShrink={0}>
 					<Text dimColor wrap="truncate-end">
-						{geo.split ? PANEL_TITLE : 'Console · Tab close'}
+						{fit(geo.split ? PANEL_TITLE : 'Console · Tab close')}
 					</Text>
 				</Box>
 				{/* A console view gets the whole panel; the output only fills what the prompt leaves */}
@@ -930,7 +938,7 @@ export default function App({
 						{panelLines.slice(Math.max(0, end - outputRows), end).map(line => (
 							<Box key={line.id} flexShrink={0}>
 								<Text color={line.color} wrap="truncate-end">
-									{line.text}
+									{fit(line.text)}
 								</Text>
 							</Box>
 						))}
@@ -939,7 +947,7 @@ export default function App({
 				{!panelView && newer > 0 && (
 					<Box flexShrink={0}>
 						<Text dimColor wrap="truncate-end">
-							{scrollHint(newer, '')}
+							{fit(scrollHint(newer, ''))}
 						</Text>
 					</Box>
 				)}
@@ -960,7 +968,7 @@ export default function App({
 				return line ? rowCells(row, selection, layoutOf(line, width)) : undefined;
 			}
 		: undefined;
-	const transcript = <Transcript rows={view.rows} newer={view.newer} boxRef={transcriptBoxRef} marks={marks} notice={copyNotice} />;
+	const transcript = <Transcript rows={view.rows} newer={view.newer} boxRef={transcriptBoxRef} marks={marks} notice={copyNotice} columns={width} />;
 
 	return (
 		<Box flexDirection="column" width={columns} height={rows}>
