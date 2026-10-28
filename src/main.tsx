@@ -16,7 +16,7 @@ const main: ModuleMain = yena => {
 	const mouse = proxy ? createMouseTerminal(process.stdout, proxy) : undefined;
 	// Signals end in Ink's unmount (App cleanup disables reporting); this covers a plain process exit.
 	if (mouse) process.once('exit', () => mouse.shutdown());
-	render(<App registry={registry} log={yena.log} mouse={mouse} />, {
+	render(<App registry={registry} log={yena.log} mouse={mouse} alerts={yena.alerts} />, {
 		...(proxy ? {stdin: proxy.stream as unknown as NodeJS.ReadStream} : {}),
 		exitOnCtrlC: false,
 		// Full screen: the app keeps and scrolls its own transcript; the terminal's screen is restored on exit.

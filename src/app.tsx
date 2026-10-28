@@ -50,7 +50,8 @@ import {
 	type Span,
 } from './transcript/selection.js';
 
-type Line = {id: number; text: string; color?: string; welcome?: boolean};
+// `alert` lines (startup alerts) stay, like the welcome hint, when a main view clears the transcript.
+type Line = {id: number; text: string; color?: string; welcome?: boolean; alert?: boolean};
 
 type Pending = {id: number; resolve: () => void; reject: (error: Error) => void};
 
@@ -124,6 +125,23 @@ const subInfo = (s: CatalogSub): ViewCommandInfo => ({
 });
 
 let nextId = 0;
+
+const MAX_ALERTS = 5;
+const ALERT_CHARS = 300;
+
+/** Startup alerts from the host as transcript lines; the text is untrusted and goes through sanitizeText. */
+export function alertLines(alerts: unknown): {text: string; color?: string}[] {
+	if (!Array.isArray(alerts)) return [];
+	const lines: {text: string; color?: string}[] = [];
+	for (const alert of alerts.slice(0, MAX_ALERTS) as {text?: unknown; detail?: unknown}[]) {
+		const text = sanitizeText(alert?.text, ALERT_CHARS);
+		if (!text) continue;
+		lines.push({text: `! ${text}`, color: c('yellow')});
+		const detail = sanitizeText(alert?.detail, ALERT_CHARS);
+		if (detail) lines.push({text: `  ${detail}`, color: c('gray')});
+	}
+	return lines;
+}
 let nextMountId = 0;
 
 export default function App({
@@ -131,11 +149,13 @@ export default function App({
 	log = noopLog,
 	mouse,
 	graceMs = AUTO_PANEL_GRACE_MS,
+	alerts,
 }: {
 	registry: Registry;
 	log?: Logger;
 	mouse?: AppMouse;
 	graceMs?: number;
+	alerts?: unknown;
 }) {
 	const {exit} = useApp();
 	const {stdout} = useStdout();
@@ -157,6 +177,7 @@ export default function App({
 				: {text: WELCOME, color: c('green')}),
 			welcome: true,
 		},
+		...alertLines(alerts).map(l => ({id: nextId++, ...l, alert: true})),
 	]);
 	const [panelLines, setPanelLines] = useState<Line[]>([]);
 	// Rebuilt when the console opens and after each command: plugins may add subcommands at runtime.
@@ -567,7 +588,7 @@ export default function App({
 				if (target === 'main') {
 					onMain();
 					// A new main view (a new chat) starts on a clean transcript; the welcome hint stays.
-					setLines(prev => prev.filter(l => l.welcome));
+					setLines(prev => prev.filter(l => l.welcome || l.alert));
 					welcomeBelowNext.current = true;
 					setAnchor(null);
 					clearSelection();

@@ -21,6 +21,9 @@ Command REPL for yena (Ink). Also runs one line from the host terminal (see "Run
 - Commands with `autostart: true` run once at startup with no arguments (their output goes to the scrollback); the welcome line then mentions Tab and Ctrl+T.
 - `settings` opens a settings screen in the console: one tab per command that declares `settings` (`SettingsTab {title, settings: Setting[], actions?: SettingAction[]}`, choice settings with `get`/`set`; malformed entries are dropped, text is sanitised; a tab with only actions is kept). Actions are listed first as `▸ <label>`: Enter calls `open(control)` and shows its view in place of the list (the screen reads no keys meanwhile); `control.close()` returns to the list and the tabs are read again (`reload`, so a new entry shows up); a view that throws while opening or rendering closes with `Cannot open: <message>`. The action's `control` carries the screen's `host`, `print` and `copyToClipboard`. ↑↓ select, Enter saves the choice and keeps the screen open (`Saved · <setting>: <option>`); ←→ switch tabs (← on the first tab moves to the main view); only Esc or Ctrl+C closes it. The screen gets the whole panel (`host.rows()`) and scrolls to keep the selection (and its label) visible; the hint row shows `· <shown>/<total>` when it scrolls.
 
+## Startup alerts
+`Yena.alerts` (optional, `StartupAlert {text, detail?}[]`, from the host, e.g. after dev mode fell back to the image) become transcript lines under the welcome hint: `! <text>` in yellow and the detail indented in gray, through `sanitizeText` (300 code points each, at most 5 alerts; `alertLines` in `src/app.tsx`). Like the welcome hint they stay when a main view clears the transcript. Test: `tests/alerts.test.tsx`.
+
 ## `ctx.mount(build, options?)`
 
 Shows an Ink view in `options.target`: `main` (default) or `panel` (in place of the console prompt).
@@ -85,7 +88,7 @@ Core gives user and autostart commands a `ctx.commandBridge` (`CommandBridge` fr
 - debug `view mounted` {id}, debug `view closed` {id}; warn `view failed` {id, err}.
 - debug `unknown command` {unknownCommand: true}: the typed token is not logged.
 
-Arguments and typed input are never logged. Records go to `logs/yena.log` in the host (debug needs `YENA_LOG_LEVEL=debug`); see the host `CLAUDE.md`. Test: `tests/log.test.tsx`.
+Arguments and typed input are never logged. Records go to `<YENA_DATA>/host/logs/yena.log` in the host (debug needs `YENA_LOG_LEVEL=debug`); see the host `CLAUDE.md`. Test: `tests/log.test.tsx`.
 
 ## Hints
 
