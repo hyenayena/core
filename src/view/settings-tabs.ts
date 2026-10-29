@@ -24,7 +24,7 @@ function validAction(raw: unknown): SettingAction | undefined {
 	return s as SettingAction;
 }
 
-/** Settings tabs contributed by commands; malformed entries are dropped. */
+/** Settings tabs contributed by commands, sorted by title; malformed entries are dropped. */
 export function collectSettingsTabs(commands: Command[]): SettingsTab[] {
 	const tabs: SettingsTab[] = [];
 	for (const command of commands) {
@@ -39,5 +39,5 @@ export function collectSettingsTabs(commands: Command[]): SettingsTab[] {
 		}
 		if (tabs.length >= MAX_TABS) break;
 	}
-	return tabs;
+	return tabs.sort((a, b) => a.title.localeCompare(b.title, 'en', {sensitivity: 'base'}));
 }

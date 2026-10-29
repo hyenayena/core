@@ -232,7 +232,10 @@ test('settings opens in the console with module tabs and saves a choice', async 
 	await type(ENTER);
 	await h.settle(60);
 	let frame = h.lastFrame();
-	assert.match(frame, /Settings  Claude/);
+	assert.match(frame, /Settings  Appearance  Claude  Other/);
+	await type(RIGHT);
+	await h.settle(60);
+	frame = h.lastFrame();
 	assert.match(frame, /Chat model/);
 	assert.match(frame, /● Default/);
 	await type(DOWN);
@@ -271,6 +274,8 @@ test('settings taller than the panel scroll inside it and never overlap', async 
 	await type(ENTER);
 	await type('settings');
 	await type(ENTER);
+	await h.settle(60);
+	await type(RIGHT);
 	await h.settle(60);
 	const check = () => {
 		const frame = h.lastFrame();

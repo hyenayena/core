@@ -91,3 +91,14 @@ test('panelShare keeps a saved value between 0.1 and 0.9 and drops anything else
 		assert.equal(loadPrefs(dir).panelShare, want, raw);
 	}
 });
+
+test('settings tabs are sorted by title', () => {
+	const tab = (title: string) => ({
+		name: title.toLowerCase(),
+		description: '',
+		run: () => {},
+		settings: {title, settings: [{key: 'k', label: 'K', options: [{value: 'a', label: 'A'}], get: () => 'a', set: () => {}}]},
+	});
+	const tabs = collectSettingsTabs([tab('Yena'), tab('appearance'), tab('Claude')]);
+	assert.deepEqual(tabs.map(t => t.title), ['appearance', 'Claude', 'Yena']);
+});
