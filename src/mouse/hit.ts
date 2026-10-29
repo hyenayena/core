@@ -11,7 +11,6 @@ export const inside = (rect: Rect, x: number, y: number): boolean =>
 
 export const toLocal = (rect: Rect, x: number, y: number): {x: number; y: number} => ({x: x - rect.x, y: y - rect.y});
 
-/** The area under the pointer; only a split layout has two areas side by side. */
 export function areaAt(point: {x: number; y: number}, layout: AreaLayout): Area {
 	if (!layout.side) return 'panel';
 	if (!layout.panelOpen) return 'main';
@@ -19,7 +18,6 @@ export function areaAt(point: {x: number; y: number}, layout: AreaLayout): Area 
 	return layout.panelRect && inside(layout.panelRect, point.x, point.y) ? 'panel' : 'main';
 }
 
-/** Rows to scroll back (positive) or forward (negative) for a wheel event, 0 for anything else. */
 export function wheelDelta(e: MouseInputEvent): number {
 	if (e.kind !== 'wheel') return 0;
 	return e.wheel === 'up' ? WHEEL_ROWS : e.wheel === 'down' ? -WHEEL_ROWS : 0;

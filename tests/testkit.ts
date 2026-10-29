@@ -26,9 +26,6 @@ export function createFakeStdout(size = {columns: 80, rows: 40}) {
 	return Object.assign(new PassThrough(), {isTTY: true, ...size});
 }
 
-/**
- * `tty` receives the presses; `stdin` is what Ink reads (default: `tty`), e.g. an input proxy wrapping `tty`.
- */
 export function mountHarness(
 	element: ReactElement,
 	size = {columns: 80, rows: 40},
@@ -53,9 +50,7 @@ export function mountHarness(
 	return {
 		raw: tty.raw,
 		press: (sequence: string) => tty.write(sequence),
-		// Escape is flushed by Ink after 20 ms, so waits must exceed that
 		settle: (ms = 30) => wait(ms),
-		// Mode switches (bracketed paste, cursor) arrive as chunks of their own; skip them.
 		lastFrame: () => [...chunks].reverse().find(c => c.replace(CONTROL_ONLY, '') !== '') ?? '',
 		allOutput: () => chunks.join(''),
 		frameCount: () => chunks.length,

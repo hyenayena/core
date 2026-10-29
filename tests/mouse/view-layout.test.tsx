@@ -74,11 +74,8 @@ function setup(size = {columns: 100, rows: 30}) {
 	return {h, send, fillMain, seen, setRows, host: () => control!.host as MouseViewHost};
 }
 
-// The screen row (0-based) that shows ROW-i, so a click can be aimed at it.
 const screenRowOf = (frame: string, i: number): number => frame.split('\n').findIndex(l => l.includes(`ROW-${i}`) && !l.includes(`ROW-${i}0`));
 
-// Views such as the claude chat anchor their input on the last rows, so the event's height must
-// equal the rendered height of the view and y must count from the view's own top row.
 async function assertRowsMap(ctx: ReturnType<typeof setup>, count: number, column: number) {
 	const frame = ctx.h.lastFrame();
 	for (let i = 0; i < count; i++) {

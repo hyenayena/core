@@ -58,10 +58,6 @@ function mergeRuns(positions: number[]): Array<[number, number]> {
 	return ranges;
 }
 
-/**
- * An empty query matches everything as tier 1 with gap 0 and no ranges, so a
- * stable sort keeps registry order.
- */
 export function matchName(query: string, name: string): Match | null {
 	const q = prepare(query).key;
 	const n = prepare(name);
@@ -133,7 +129,6 @@ function better(a: Match, aLen: number, b: Match, bLen: number): boolean {
 	return aLen < bLen;
 }
 
-/** Ranks items by their best-matching name; the result order is total and deterministic. */
 export function rank<T>(
 	query: string,
 	items: readonly T[],

@@ -18,7 +18,6 @@ function subLabel(sub: CatalogSub): string {
 	return sub.aliases.length > 0 ? `${sub.name} (${sub.aliases.join(', ')})` : sub.name;
 }
 
-// The usage after the subcommand's own path; a relative usage (`install <src>`) after its name.
 function usageTail(usage: string, names: readonly string[], sub: CatalogSub): string {
 	const words = usage.trim().split(/\s+/).filter(Boolean);
 	if (names.length > 0 && names.every((w, i) => words[i] === w)) return words.slice(names.length).join(' ');
@@ -79,7 +78,6 @@ function resolve(catalog: Catalog, path: readonly string[]): Resolved {
 const cleanPath = (path: unknown): string[] =>
 	Array.isArray(path) ? path.slice(0, MAX_PATH + 1).filter((p): p is string => typeof p === 'string') : [];
 
-/** Why `helpLines` cannot describe the path (an unknown command or subcommand), as one message. */
 export function helpError(catalog: Catalog, path: readonly string[]): string | undefined {
 	const p = cleanPath(path);
 	if (p.length === 0) return undefined;
@@ -107,7 +105,6 @@ function nodeLines(node: Node, names: readonly string[]): string[] {
 	return lines;
 }
 
-/** Lines for `help` (empty path) or `help <command> [subcommand…]`; an unknown path yields its error lines. */
 export function helpLines(catalog: Catalog, path: readonly string[] = []): string[] {
 	const p = cleanPath(path);
 	if (p.length === 0) {

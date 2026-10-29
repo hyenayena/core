@@ -11,13 +11,11 @@ export type CatalogSub = {
 	aliases: string[];
 	usage: string;
 	description: string;
-	// Undefined when the subcommand declares nothing and inherits its command's policy.
 	agent: AgentPolicy | undefined;
 	subs: CatalogSub[];
 	args: CatalogArg[];
 	options: CatalogOption[];
 	notes: string[];
-	// Core's own `help` subcommand, added where a node has subcommands and declares no `help`.
 	builtin?: true;
 };
 
@@ -60,7 +58,6 @@ function isObject(v: unknown): v is Record<string, unknown> {
 	return typeof v === 'object' && v !== null;
 }
 
-// A throwing getter or any value but the three literals must never widen access.
 function readAgent(e: Record<string, unknown>): AgentPolicy | undefined {
 	try {
 		const v = e['agent'];
@@ -176,7 +173,6 @@ function builtinHelp(path: readonly string[]): CatalogSub {
 	};
 }
 
-// Appended after the cap so it is never cut off; a declared `help` (name or alias) keeps its routing.
 function withHelp(subs: CatalogSub[], path: readonly string[]): CatalogSub[] {
 	if (subs.length === 0 || subs.some(s => s.name === 'help' || s.aliases.includes('help'))) return subs;
 	return [...subs, builtinHelp(path)];
@@ -222,7 +218,6 @@ function buildSubs(raw: unknown, depth: number, path: readonly string[]): Catalo
 	return out;
 }
 
-/** Validates, sanitises and caps registry data once; never throws. */
 export function buildCatalog(commands: readonly unknown[]): Catalog {
 	const list: CatalogCommand[] = [];
 	const byName = new Map<string, CatalogCommand>();

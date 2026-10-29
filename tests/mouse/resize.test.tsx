@@ -11,7 +11,6 @@ import {createFakeStdout, createFakeTty, mountHarness} from '../testkit.js';
 import type {Command, MountControl} from '../../../../src/api.js';
 
 const ESC = '\x1b';
-// x and y are 1-based, as the terminal sends them.
 const press = (x: number, y: number) => `${ESC}[<0;${x};${y}M`;
 const drag = (x: number, y: number) => `${ESC}[<32;${x};${y}M`;
 const release = (x: number, y: number) => `${ESC}[<0;${x};${y}m`;
@@ -63,7 +62,6 @@ test('dragging the console border resizes the chat and saves the share on releas
 	await h.settle(60);
 	await send(CTRL_T);
 	assert.match(h.lastFrame(), /CHAT w60/);
-	// The border is column 60 (0-based), 61 as the terminal counts.
 	await send(press(61, 10));
 	await send(drag(51, 10));
 	assert.match(h.lastFrame(), /CHAT w50/);
@@ -72,7 +70,6 @@ test('dragging the console border resizes the chat and saves the share on releas
 	await send(release(41, 12));
 	assert.match(h.lastFrame(), /CHAT w40/);
 	assert.equal(getPrefs().panelShare, 0.6);
-	// After the release a drag is a plain drag again.
 	await send(drag(70, 12));
 	assert.match(h.lastFrame(), /CHAT w40/);
 	h.unmount();

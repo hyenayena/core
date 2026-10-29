@@ -5,7 +5,6 @@ export const TITLE_BAR_COLORS = ['olive', 'blue', 'teal', 'gray', 'inverse'] as 
 export type TitleBarColor = (typeof TITLE_BAR_COLORS)[number];
 export const AGENT_MODES = ['policy', 'ask', 'off'] as const;
 export type AgentMode = (typeof AGENT_MODES)[number];
-/** `panelShare`: the part of the width the side console takes, set by dragging its border. */
 export type CorePrefs = {titleBar: TitleBarColor; colors: boolean; mouse: boolean; agentCommands: AgentMode; panelShare: number};
 
 export const DEFAULT_PREFS: CorePrefs = {titleBar: 'olive', colors: true, mouse: true, agentCommands: 'policy', panelShare: 0.4};
@@ -27,7 +26,6 @@ const clean = (raw: unknown): CorePrefs => {
 	};
 };
 
-/** Reads `<dataDir>/appearance.json`; a missing or broken file gives the defaults. */
 export function loadPrefs(dataDir: string): CorePrefs {
 	file = path.join(dataDir, 'appearance.json');
 	try {

@@ -7,7 +7,6 @@ import {sliceCells, truncateCells} from '../hints/width.js';
 export const scrollHint = (newer: number, keys = 'PgDn or Shift+↓') =>
 	`↓ ${newer} newer line${newer === 1 ? '' : 's'}${keys === '' ? '' : ` · ${keys}`}`;
 
-/** The selected cells [from, to) of a row, or undefined. */
 export type RowMarks = (row: VisibleRow) => [number, number] | undefined;
 
 function Row({row, cells}: {row: VisibleRow; cells: [number, number] | undefined}) {
@@ -19,7 +18,6 @@ function Row({row, cells}: {row: VisibleRow; cells: [number, number] | undefined
 		);
 	}
 	const [from, to] = cells;
-	// The selected part is drawn plain and inverted; the rest keeps its styles.
 	return (
 		<Text color={row.color} wrap="truncate-end">
 			{sliceStyledCells(row.text, 0, from)}
@@ -29,11 +27,6 @@ function Row({row, cells}: {row: VisibleRow; cells: [number, number] | undefined
 	);
 }
 
-/**
- * The scrollback of the full-screen app, as screen rows already wrapped to its width.
- * `newer` counts the rows hidden below the view; the overflow is clipped at the top.
- * `notice` is a short message drawn over the bottom right corner (it takes no row).
- */
 export default function Transcript({
 	rows,
 	newer,
@@ -47,7 +40,6 @@ export default function Transcript({
 	boxRef?: Ref<DOMElement>;
 	marks?: RowMarks | undefined;
 	notice?: string | undefined;
-	/** Cells the scroll hint may take. */
 	columns?: number | undefined;
 }) {
 	return (

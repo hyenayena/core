@@ -26,17 +26,12 @@ type Props = {
 	catalog: Catalog;
 	onSubmit: (line: string) => void;
 	onInterrupt: () => void;
-	// Defaults: the terminal size, always active.
 	columns?: number;
 	rows?: number;
 	active?: boolean;
-	// Left arrow on an empty line (moves focus to the neighbouring area).
 	onLeftEdge?: () => void;
-	/** Tab with nothing to complete. */
 	onIdleTab?: () => void;
-	// Esc twice on an empty line (closes the side console).
 	isHostKey?: (input: string, key: Key) => boolean;
-	// Set to the click handler while mounted; it returns true when the click acted.
 	mouseRef?: React.MutableRefObject<((e: MouseInputEvent) => boolean) | null>;
 };
 
@@ -95,8 +90,6 @@ export default function Prompt({
 	mouseRef,
 	...size
 }: Props) {
-	// Keys can arrive faster than React re-renders, so the source of truth lives
-	// in a ref and the state copy only drives rendering.
 	const stateRef = useRef<PromptState>(initialState);
 	const [state, setState] = useState<PromptState>(initialState);
 	const historyRef = useRef(history);
@@ -127,7 +120,6 @@ export default function Prompt({
 	useInput(
 		(input, key) => {
 			if (isHostKey?.(input, key)) return;
-			// Page keys and Shift+↑/↓ scroll the transcript; the app handles them.
 			if (key.pageUp || key.pageDown || (key.shift && (key.upArrow || key.downArrow))) return;
 			if (key.leftArrow && onLeftEdge && stateRef.current.value === '') return onLeftEdge();
 			apply(toKeyInput(input, key));
@@ -161,7 +153,6 @@ export default function Prompt({
 		if (e.kind !== 'press' || e.button !== 'left') return false;
 		const view = rendered.current;
 		const node = rootRef.current;
-		// Keys may have outrun the last render; the click refers to what is on screen.
 		if (!view || !node || view.state !== stateRef.current) return false;
 		const box = measureElement(node);
 		const x = e.x - box.x;

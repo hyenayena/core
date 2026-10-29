@@ -12,7 +12,6 @@ import type {Command, MountControl, ViewHost} from '../../../../src/api.js';
 import type {ViewMouseEvent, ViewMouseHost} from '../../src/mouse/view-mouse.js';
 
 const ESC = '\x1b';
-// x and y are 1-based, as the terminal sends them.
 const wheelUp = (x: number, y: number) => `${ESC}[<64;${x};${y}M`;
 const wheelDown = (x: number, y: number) => `${ESC}[<65;${x};${y}M`;
 const click = (x: number, y: number) => `${ESC}[<0;${x};${y}M`;
@@ -270,7 +269,6 @@ test('the host passed to views offers subscribeMouse', async () => {
 test('a view gets its events in local coordinates with its box size', async () => {
 	const {h, send, seen} = mouseSetup(() => true);
 	await h.settle(60);
-	// 30 rows: the three view rows are the screen rows 28..30 (1-based).
 	await send(click(5, 29));
 	await send(wheelDown(7, 30));
 	assert.equal(seen.length, 2);

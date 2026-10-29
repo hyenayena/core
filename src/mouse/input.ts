@@ -77,7 +77,6 @@ export function createInputProxy(
 			try {
 				listener(event);
 			} catch {
-				// A failing listener must not break keyboard input.
 			}
 		}
 	};
@@ -117,7 +116,6 @@ export function createInputProxy(
 		source.on('readable', onSourceReadable);
 	};
 
-	// While nobody reads the proxy (a suspended terminal), the source is not drained either.
 	const detach = () => {
 		if (!attached) return;
 		attached = false;
@@ -162,7 +160,6 @@ export function createInputProxy(
 		},
 		setEnabled(on) {
 			enabled = on;
-			// X10 reports carry raw bytes that look like text, so they are only consumed while mouse reporting is wanted.
 			tokenizer.setX10(on);
 		},
 	};

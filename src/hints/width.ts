@@ -20,7 +20,6 @@ const WIDE_RANGES: ReadonlyArray<readonly [number, number]> = [
 	[0x20000, 0x3fffd],
 ];
 
-/** Splits into grapheme clusters; never throws. */
 export function graphemes(s: string): string[] {
 	if (typeof s !== 'string' || s === '') return [];
 	const out: string[] = [];
@@ -28,7 +27,6 @@ export function graphemes(s: string): string[] {
 	return out;
 }
 
-/** Terminal cell width of one grapheme cluster. */
 export function cellWidth(g: string): 0 | 1 | 2 {
 	if (typeof g !== 'string' || g === '') return 0;
 	const cp = g.codePointAt(0) as number;
@@ -49,7 +47,6 @@ export function stringCells(s: string): number {
 	return n;
 }
 
-/** Cuts to at most `max` cells on a grapheme boundary, ending in `ellipsis` when cut. */
 export function truncateCells(s: string, max: number, ellipsis = '…'): string {
 	if (!(max > 0)) return '';
 	if (stringCells(s) <= max) return s;
@@ -58,7 +55,6 @@ export function truncateCells(s: string, max: number, ellipsis = '…'): string 
 	return sliceCells(s, 0, budget) + ellipsis;
 }
 
-/** Graphemes fully inside the cell window [startCell, startCell + maxCells). */
 export function sliceCells(s: string, startCell: number, maxCells: number): string {
 	if (!(maxCells > 0)) return '';
 	const start = Math.max(0, startCell);

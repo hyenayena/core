@@ -50,7 +50,6 @@ import {
 	type Span,
 } from './transcript/selection.js';
 
-// `alert` lines (startup alerts) stay, like the welcome hint, when a main view clears the transcript.
 type Line = {id: number; text: string; color?: string; welcome?: boolean; alert?: boolean};
 
 type Pending = {id: number; resolve: () => void; reject: (error: Error) => void};
@@ -71,19 +70,13 @@ export type AppMouse = {
 };
 
 const MAX_PANEL_LINES = 500;
-// The full-screen app keeps its own scrollback; the oldest lines go past this.
 export const MAX_LINES = 5000;
 const TITLE_MAX = 200;
-// Below this width the open console covers the chat instead of sitting beside it
 const SPLIT_MIN_COLUMNS = 60;
 const MAX_MOUSE_LISTENERS = 8;
-// The same cap as a line typed in the console or run by an assistant.
 const RUN_LINE_MAX = 4096;
-// Presses this close in time on one cell count as a double or triple click.
 const MULTI_CLICK_MS = 400;
-// How long "Copied" stays over the transcript.
 const COPY_NOTICE_MS = 2000;
-// How long a console opened for an assistant stays after the last owner ended, unless the user touched it.
 export const AUTO_PANEL_GRACE_MS = 3000;
 
 export const WELCOME = 'yena — type "help" for the list of commands';
@@ -92,7 +85,6 @@ export const PANEL_TITLE = 'Console · Tab close · ⇧← chat';
 
 export type PanelGeometry = {split: boolean; panelColumns: number; mainColumns: number; panelRows: number};
 
-/** Sizes of the chat and console areas while a main view is shown. */
 export function panelGeometry(columns: number, rows: number, open: boolean, share = DEFAULT_PREFS.panelShare): PanelGeometry {
 	const panelRows = Math.max(3, rows);
 	if (!open) return {split: false, panelColumns: 0, mainColumns: columns, panelRows};
@@ -101,7 +93,6 @@ export function panelGeometry(columns: number, rows: number, open: boolean, shar
 	return {split: true, panelColumns, mainColumns: columns - panelColumns, panelRows};
 }
 
-/** The panel share that puts the console's border at column `x` (0-based), within the panel's limits. */
 export function shareAtBorder(columns: number, x: number): number {
 	const {panelColumns} = panelGeometry(columns, 0, true, (columns - x) / columns);
 	return panelColumns / columns;
@@ -129,7 +120,6 @@ let nextId = 0;
 const MAX_ALERTS = 5;
 const ALERT_CHARS = 300;
 
-/** Startup alerts from the host as transcript lines; the text is untrusted and goes through sanitizeText. */
 export function alertLines(alerts: unknown): {text: string; color?: string}[] {
 	if (!Array.isArray(alerts)) return [];
 	const lines: {text: string; color?: string}[] = [];
@@ -180,7 +170,6 @@ export default function App({
 		...alertLines(alerts).map(l => ({id: nextId++, ...l, alert: true})),
 	]);
 	const [panelLines, setPanelLines] = useState<Line[]>([]);
-	// Rebuilt when the console opens and after each command: plugins may add subcommands at runtime.
 	const [catalogTick, setCatalogTick] = useState(0);
 	const refreshCatalog = () => setCatalogTick(n => n + 1);
 	const catalog = useMemo(() => buildCatalog(registry.commands), [registry, catalogTick]);
@@ -193,9 +182,7 @@ export default function App({
 	const [focus, setFocus] = useState<Focus>('main');
 	const pending = useRef<Record<MountTarget, Pending | null>>({main: null, panel: null});
 
-	// With no main view the console owns the screen, as a plain REPL.
 	const side = main !== null;
-	// While the console's border is dragged the share lives here; it is saved when the button is let go.
 	const [dragShare, setDragShare] = useState<number | null>(null);
 	const geo = panelGeometry(columns, rows, panelOpen, dragShare ?? getPrefs().panelShare);
 	const consoleShown = !side || panelOpen;
@@ -205,8 +192,6 @@ export default function App({
 		if (active === 'panel') refreshCatalog();
 	}, [active]);
 
-	// Hosts are created once per view, so they read the latest layout through this ref.
-	// Without a chat the console view has the screen, less one row so Ink never clears it.
 	const panelViewRows = side ? Math.max(1, geo.panelRows - 1) : Math.max(1, rows - 1);
 	const panelOutputRows = Math.max(0, geo.panelRows - 4);
 	const snapshot = {
@@ -224,7 +209,6 @@ export default function App({
 	};
 	const live = useRef(snapshot);
 	live.current = snapshot;
-	// The same values the hosts report, handed to the mounted views in this render (see ViewLayoutContext).
 	const mainLayout = useMemo(() => ({focused: active === 'main', columns: geo.mainColumns}), [active, geo.mainColumns]);
 	const panelLayout = useMemo(() => ({focused: active === 'panel', columns: panelInner}), [active, panelInner]);
 	const listeners = useRef<Set<() => void>>(new Set());
@@ -238,7 +222,6 @@ export default function App({
 		}
 	}, [active, geo.mainColumns, panelInner, panelOpen, side, rows, panelViewRows]);
 
-	// Bumped on every user action on the console; an auto-opened console closes only if it stayed at its opening value.
 	const panelEpoch = useRef(0);
 	const activityMounts = useRef(new Map<number, ActivityInfo>());
 	const autoOpened = useRef(false);
@@ -258,7 +241,6 @@ export default function App({
 		[],
 	);
 
-	// An assistant run or activity view begins: open the console beside the chat if it is closed.
 	const startOwner = () => {
 		owners.current++;
 		clearGrace();
@@ -268,7 +250,6 @@ export default function App({
 		autoEpoch.current = panelEpoch.current;
 		setPanelOpen(true);
 		refreshCatalog();
-		// Beside the chat the focus stays there; a console that covers the chat takes it.
 		setFocus(l.columns >= SPLIT_MIN_COLUMNS ? 'main' : 'panel');
 	};
 	const endOwner = () => {
@@ -299,7 +280,6 @@ export default function App({
 		return true;
 	};
 
-	// The latest submit, for views that run console lines (it reads this render's state).
 	const submitRef = useRef<(raw: string) => Promise<void>>(async () => {});
 
 	const togglePanel = (): boolean => {
@@ -327,12 +307,10 @@ export default function App({
 			const parsed = parseLine(line);
 			if (!parsed || !registry.find(parsed.name)) return false;
 			const l = live.current;
-			// The output goes to the console, so it is shown; the input stays where the user typed.
 			if (l.side && !l.panelOpen) {
 				refreshCatalog();
 				setPanelOpen(true);
 			}
-			// Runs in the background like a typed line; the caller only learns whether it was a command.
 			void submitRef.current(line);
 			return true;
 		},
@@ -404,7 +382,6 @@ export default function App({
 		}
 	};
 
-	// An unmount (exit, signal) must not leave a command awaiting forever
 	useEffect(
 		() => () => {
 			for (const target of ['main', 'panel'] as const) {
@@ -418,9 +395,7 @@ export default function App({
 	const [anchor, setAnchor] = useState<Anchor | null>(null);
 	const rowCache = useRef(createRowCache()).current;
 	const layoutOf = useRef(createLayoutCache(rowCache)).current;
-	// Text selected with the mouse in the transcript; copied when the button is let go.
 	const [selection, setSelectionState] = useState<Span | null>(null);
-	// Mouse events come faster than renders, so the ref holds the truth.
 	const selectionRef = useRef<Span | null>(null);
 	const setSelection = (span: Span | null) => {
 		if (selectionRef.current === span) return;
@@ -452,9 +427,6 @@ export default function App({
 	};
 	const linesRef = useRef(lines);
 	linesRef.current = lines;
-	// While the console covers the chat its width is 0; keep wrapping at the last real width.
-	// The last column stays empty: a row that reaches the terminal's edge wraps there when the
-	// terminal draws a glyph wider than measured (e.g. "…"), and the frame then scrolls by a row.
 	const widthRef = useRef(Math.max(1, columns - 1));
 	const shownWidth = side ? geo.mainColumns : columns;
 	if (shownWidth > 0) widthRef.current = Math.max(1, shownWidth - 1);
@@ -465,9 +437,7 @@ export default function App({
 		return height > 0 ? height : Math.max(1, rows - 6);
 	};
 	const hintShown = useRef(false);
-	// A scrolled view always shows the hint, so its top is clamped with the hint row taken.
 	const anchoredViewport = () => Math.max(1, viewportHeight() - (hintShown.current ? 0 : 1));
-	// Set when a main view mounts: its first print (the banner) goes above the welcome hint, so the hint reads under it.
 	const welcomeBelowNext = useRef(false);
 	const printMain = (text: string, color?: string, options?: PrintOptions) => {
 		const actions = cleanActions(options?.actions);
@@ -494,8 +464,6 @@ export default function App({
 	const [panelScroll, setPanelScroll] = useState(0);
 	const panelScrollRef = useRef(0);
 	panelScrollRef.current = panelScroll;
-	// Panel lines wrap instead of being cut, and the panel scroll counts the wrapped rows.
-	// The panel ends at the terminal's edge, so its rows keep the last column empty (see widthRef).
 	const panelRowCache = useRef(createRowCache()).current;
 	const panelWidth = Math.max(1, panelInner - 1);
 	const panelRows = useMemo(
@@ -519,10 +487,8 @@ export default function App({
 		);
 	const sideRef = useRef(side);
 	sideRef.current = side;
-	// Console output stays in the panel while it sits beside a view, else it goes to the scrollback.
 	const printConsole = (text: string, color?: string) => (sideRef.current ? printPanel : printMain)(text, color);
 
-	// A passive panel view: no focus change, opens the console, hides the prompt. Used by assistant commands and `activity` mounts.
 	const mountActivity = (
 		build: (control: MountControl) => UiElement,
 		print: (text: string) => void,
@@ -587,7 +553,6 @@ export default function App({
 				log.debug('view mounted', {id});
 				if (target === 'main') {
 					onMain();
-					// A new main view (a new chat) starts on a clean transcript; the welcome hint stays.
 					setLines(prev => prev.filter(l => l.welcome || l.alert));
 					welcomeBelowNext.current = true;
 					setAnchor(null);
@@ -609,7 +574,6 @@ export default function App({
 		setPanelScroll(0);
 	};
 
-	// The bridge outlives renders, so it reads the latest closures through this ref.
 	const mountAgentView = (build: (control: MountControl) => UiElement, print: (text: string) => void) => mountActivity(build, print, true);
 	const bridgeDeps = useRef({tee: printConsole, clear: clearAll, afterRun: refreshCatalog, mountView: mountAgentView, beforeRun: startOwner, endRun: endOwner});
 	bridgeDeps.current = {tee: printConsole, clear: clearAll, afterRun: refreshCatalog, mountView: mountAgentView, beforeRun: startOwner, endRun: endOwner};
@@ -630,7 +594,6 @@ export default function App({
 	const commandBridge = bridgeRef.current;
 
 	const makeCtx = (print: (text: string, color?: string) => void): CommandContext => {
-		// A command that opened the main view keeps printing into the scrollback above it.
 		let ownsMain = false;
 		const out = (text: string, color?: string) => (ownsMain ? printMain : print)(text, color);
 		return {
@@ -673,7 +636,6 @@ export default function App({
 	const handleSubmit = async (raw: string) => {
 		const line = raw.trim();
 		if (isQuitLine(line)) {
-			// Next to a view ":q" closes the console; a console that is the whole screen exits.
 			if (side && panelOpen) togglePanel();
 			else exit();
 			return;
@@ -696,9 +658,7 @@ export default function App({
 
 	submitRef.current = handleSubmit;
 
-
 	useInput((input, key) => {
-		// Any key ends a selection, as in a terminal; the key still does its work.
 		if (selectionRef.current || dragRef.current) clearSelection();
 		const direction = focusMove(key);
 		if (direction) {
@@ -706,7 +666,6 @@ export default function App({
 			return;
 		}
 		if (!isConsoleToggle(input, key)) {
-			// The transcript scrolls unless the side console has the input.
 			if (side && active === 'panel') {
 				panelEpoch.current++;
 				return;
@@ -725,7 +684,6 @@ export default function App({
 	const promptMouse = useRef<((e: MouseInputEvent) => boolean) | null>(null);
 	const mainViewRef = useRef<DOMElement>(null);
 	const consoleBodyRef = useRef<DOMElement>(null);
-	// The first listener returning exactly true consumes the event.
 	const dispatchToView = (target: MountTarget, e: MouseInputEvent, rect: Rect): boolean => {
 		const mountId = pending.current[target]?.id;
 		if (mountId === undefined || e.kind === 'drag') return false;
@@ -752,12 +710,10 @@ export default function App({
 		}
 		return false;
 	};
-	// The transcript row and cell under the pointer, clamped to the transcript box.
 	const markUnder = (e: MouseInputEvent, rect: Rect): Mark | undefined => {
 		const shown = shownRowsRef.current;
 		if (shown.length === 0 || rect.height <= 0) return undefined;
 		const y = Math.max(0, Math.min(rect.height - 1, e.y - rect.y));
-		// Rows sit at the bottom of the box and the overflow is clipped at the top.
 		const index = Math.max(0, Math.min(shown.length - 1, shown.length - (rect.height - y)));
 		const row = shown[index]!;
 		const line = linesRef.current.find(x => x.id === row.id);
@@ -772,14 +728,12 @@ export default function App({
 		showCopyNotice(copyToClipboard(stdout, text) ? `Copied ${text.length} character${text.length === 1 ? '' : 's'}` : 'Too long to copy');
 	};
 
-	// Press, drag and release over the transcript select text; true when the event was used for that.
 	const selectionMouse = (e: MouseInputEvent): boolean => {
 		const box = transcriptBoxRef.current;
 		const drag = dragRef.current;
 		if (e.kind === 'drag') {
 			if (!drag || !box) return false;
 			const abs: Rect = measureElement(box);
-			// Past the top or bottom edge the transcript scrolls one row per move.
 			if (e.y < abs.y) scrollBy(1);
 			else if (e.y >= abs.y + abs.height) scrollBy(-1);
 			const head = markUnder(e, abs);
@@ -832,9 +786,7 @@ export default function App({
 		return true;
 	};
 
-	// Mouse events come faster than renders, so the ref holds the share being dragged.
 	const resizeRef = useRef<number | null>(null);
-	// A press on the console's left border starts a resize; drags move it and the release saves it.
 	const resizeMouse = (e: MouseInputEvent, l: typeof snapshot, panelRect: Rect | undefined): boolean => {
 		if (resizeRef.current !== null) {
 			if (e.kind === 'drag') {
@@ -872,7 +824,6 @@ export default function App({
 			}
 		}
 		if (selectionMouse(e)) return;
-		// Views get presses, releases and the wheel; drags only select.
 		if (e.kind === 'drag') return;
 		const hasView = area === 'main' ? l.side : l.hasPanelView;
 		const box = area === 'main' ? mainViewRef.current : consoleBodyRef.current;
@@ -905,7 +856,6 @@ export default function App({
 			</ViewLayoutContext.Provider>
 		);
 		if (panelView && !panelView.activity) return view;
-		// The prompt keeps its place in the tree while an activity view is shown, so the draft survives.
 		const prompt = (
 			<Prompt
 				history={history}
@@ -960,7 +910,6 @@ export default function App({
 						{fit(geo.split ? PANEL_TITLE : 'Console · Tab close')}
 					</Text>
 				</Box>
-				{/* A console view gets the whole panel; the output only fills what the prompt leaves */}
 				{!panelView && (
 					<Box flexDirection="column" flexGrow={1} flexShrink={1} justifyContent="flex-end" overflow="hidden">
 						{panelRows.slice(Math.max(0, end - outputRows), end).map(row => (
@@ -1002,7 +951,6 @@ export default function App({
 		<Box flexDirection="column" width={columns} height={rows}>
 			{main ? (
 				<Box flexDirection="row" flexGrow={1}>
-					{/* Kept mounted while covered, so the view and its session survive */}
 					<Box
 						flexDirection="column"
 						width={geo.mainColumns > 0 ? geo.mainColumns : undefined}
@@ -1013,7 +961,6 @@ export default function App({
 						<Box ref={mainViewRef} flexDirection="column" flexShrink={0}>
 							<ViewLayoutContext.Provider value={mainLayout}>
 								<MountBoundary key={main.id} onError={error => settle('main', main.id, error)}>
-									{/* UiElement is opaque in the host contract; it is a React element here */}
 									{main.element as ReactNode}
 								</MountBoundary>
 							</ViewLayoutContext.Provider>

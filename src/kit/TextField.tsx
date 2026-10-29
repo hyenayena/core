@@ -8,12 +8,9 @@ import {useViewHost} from '../view/use-view-host.js';
 
 export interface TextFieldProps {
 	label: string;
-	// Shown dim under the label, e.g. what the value is for.
 	hint?: string;
 	initial?: string;
-	// An empty value is submitted only when optional.
 	optional?: boolean;
-	// Returns an error message to show, or undefined when the value is fine.
 	validate?: (value: string) => string | undefined;
 	onSubmit: (value: string) => void;
 	onCancel: () => void;
@@ -22,13 +19,10 @@ export interface TextFieldProps {
 }
 
 const MAX = 1024;
-// A paste arrives as one input; its control characters (newlines included) are dropped.
 const CONTROL = new RegExp('[\\u0000-\\u001f\\u007f-\\u009f]', 'g');
 
-/** A one-line text input: typing appends, Backspace deletes, Enter submits, Esc cancels. */
 export function TextField({label, hint, initial = '', optional = false, validate, onSubmit, onCancel, host, maxLength = MAX}: TextFieldProps) {
 	const {focused, columns} = useViewHost(host);
-	// Keys can arrive faster than renders (a paste, then Enter), so the ref holds the truth.
 	const valueRef = useRef(initial);
 	const [value, setValueState] = useState(initial);
 	const setValue = (next: string) => {
@@ -61,7 +55,6 @@ export function TextField({label, hint, initial = '', optional = false, validate
 	);
 
 	const width = Math.max(1, columns - 1);
-	// The end of a long value stays in view, where the typing happens.
 	const shown = sanitizeText(value, maxLength);
 	const room = Math.max(1, width - 3);
 	let tail = shown;

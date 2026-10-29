@@ -5,7 +5,6 @@ export type Windowed = {
 	cursorCell: string;
 	after: string;
 	ghost: string;
-	// Grapheme index of the first grapheme of `before` (after a left `…`)
 	start: number;
 	leftCut: boolean;
 	rightCut: boolean;
@@ -39,10 +38,6 @@ function head(gs: readonly string[], budget: number): string[] {
 	return out;
 }
 
-/**
- * Fits a single-row view of the line into `maxCells`. `cursor` is a grapheme index;
- * the ghost is only shown when the cursor is at the end of the line.
- */
 export function windowLine(
 	gs: readonly string[],
 	cursor: number,
@@ -100,12 +95,6 @@ export function windowLine(
 	return out;
 }
 
-/**
- * Grapheme index for a click on `cell` (0-based, from the start of the window) of a window built by
- * `windowLine` for a line of `length` graphemes with the cursor at grapheme `cursor`. The left `…`
- * and negative cells give the first visible grapheme, the right `…` the first hidden one, the ghost
- * and anything past the end the end of the line.
- */
 export function indexAtCell(win: Windowed, length: number, cursor: number, cell: number): number {
 	const n = Math.max(0, Math.floor(length) || 0);
 	const clamp = (i: number) => Math.min(Math.max(0, i), n);

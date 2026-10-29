@@ -2,7 +2,6 @@ import type {InputProxy} from './input.js';
 import type {MouseInputEvent} from './sgr.js';
 
 const ESC = String.fromCharCode(27);
-// 1002: presses, releases and moves while a button is held (for selecting text); 1006: SGR encoding.
 export const MOUSE_ENABLE = `${ESC}[?1002h${ESC}[?1006h`;
 export const MOUSE_DISABLE = `${ESC}[?1006l${ESC}[?1002l${ESC}[?1000l`;
 
@@ -31,7 +30,6 @@ export function createMouseTerminal(
 		try {
 			stdout.write(next ? MOUSE_ENABLE : MOUSE_DISABLE);
 		} catch {
-			// A closed or broken terminal: there is nothing left to switch.
 		}
 	};
 

@@ -7,7 +7,6 @@ export type CommandToolSpec = {
 	inputSchema: {type: 'object'; properties: Record<string, unknown>; required: string[]; additionalProperties: false};
 };
 
-/** Neutral tool specs for any agent module to adapt to its model API. */
 export const COMMAND_TOOLS: {list_commands: CommandToolSpec; run_command: CommandToolSpec} = {
 	list_commands: {
 		name: 'list_commands',
@@ -30,13 +29,11 @@ export const COMMAND_TOOLS: {list_commands: CommandToolSpec; run_command: Comman
 
 const MAX_DEPTH = 8;
 
-// Core's own `help` subcommand; the closing line points to `help` instead of repeating it everywhere.
 const isBuiltinHelp = (sub: CommandInfoSub): boolean =>
 	sub.name === 'help' && !(sub.subcommands?.length) && sub.usage.endsWith(' help [subcommand…]');
 
 const subsOf = (node: {subcommands?: CommandInfoSub[]}): CommandInfoSub[] => (Array.isArray(node.subcommands) ? node.subcommands : []);
 
-// Pushes the lines of the subcommands the model may run; returns how many were left out.
 function subLines(subs: readonly CommandInfoSub[], depth: number, lines: string[]): number {
 	if (depth > MAX_DEPTH) return 0;
 	let closed = 0;
@@ -56,12 +53,6 @@ function subLines(subs: readonly CommandInfoSub[], depth: number, lines: string[
 	return closed;
 }
 
-/**
- * Plain text listing for a model; one line per command and per subcommand it may run, nested ones
- * indented. Entries the model cannot run ("deny") cost most of the listing (e.g. every Claude Code
- * skill), so they are only named in one closing line: the model still knows they exist and that the
- * user runs them.
- */
 export function formatCommandList(list: readonly CommandInfo[]): string {
 	if (list.length === 0) return 'No commands are available.';
 	const lines: string[] = [];
@@ -84,10 +75,6 @@ export function formatCommandList(list: readonly CommandInfo[]): string {
 
 export type ResolvedCommandLine = {command: string; subcommand?: string; policy: AgentPolicy};
 
-/**
- * The command and subcommand path a line runs and the policy listed for it, walked as the bridge
- * walks the catalog (name before alias); undefined for a blank line or an unknown command.
- */
 export function resolveCommandLine(list: readonly CommandInfo[], line: string): ResolvedCommandLine | undefined {
 	if (typeof line !== 'string' || !Array.isArray(list)) return undefined;
 	const parsed = parseLine(line);
@@ -109,7 +96,6 @@ export function resolveCommandLine(list: readonly CommandInfo[], line: string): 
 	return resolved;
 }
 
-/** Plain text result for a model: the output, or why the command did not run. */
 export function formatRunResult(result: CommandRunResult): string {
 	const parts: string[] = [];
 	if (result.status !== 'ok') parts.push(`Command ${result.status}${result.reason ? `: ${result.reason}` : ''}`);

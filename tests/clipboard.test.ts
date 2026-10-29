@@ -13,7 +13,6 @@ test('OSC 52 carries the text as base64, so nothing in it can escape', () => {
 
 test('copyToClipboard writes once, refuses oversized text and survives a failing stream', () => {
 	const out: string[] = [];
-	// No clipboard folder: the env of a running yena (dev check from the app) has one.
 	const env = {};
 	assert.equal(copyToClipboard({write: s => out.push(s)}, 'abc', env), true);
 	assert.equal(out.length, 1);

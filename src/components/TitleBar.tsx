@@ -4,7 +4,6 @@ import {colorEnabled} from '../hints/style.js';
 import {getPrefs, type TitleBarColor} from '../view/prefs.js';
 import {stringCells, truncateCells} from '../hints/width.js';
 
-/** One inverse row: the title on the left, the detail right-aligned, the title shortened first. */
 export function titleBarText(title: string, detail: string, columns: number): {left: string; right: string} {
 	const width = Math.max(1, columns);
 	const right = detail === '' ? '' : truncateCells(` ${detail} `, Math.max(0, width - 4));
@@ -20,7 +19,6 @@ const BAR: Record<Exclude<TitleBarColor, 'inverse'>, {backgroundColor: string; c
 	gray: {backgroundColor: '#5a5a5a', color: '#ffffff'},
 };
 
-/** The bar colour from the Appearance settings; inverse when colours are off or NO_COLOR is set. */
 export function titleBarStyle(env: Record<string, string | undefined> = process.env, color: TitleBarColor = getPrefs().titleBar) {
 	return colorEnabled(env) && color !== 'inverse' ? BAR[color] : {inverse: true};
 }

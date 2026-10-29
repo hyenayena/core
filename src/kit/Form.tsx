@@ -10,7 +10,6 @@ export type FormField = {
 	id: string;
 	label: string;
 	value: string;
-	// Shown dim after the value while the field is empty, e.g. what it is for.
 	placeholder?: string;
 	readOnly?: boolean;
 };
@@ -23,9 +22,7 @@ export interface FormProps {
 	title?: string;
 	fields: FormField[];
 	buttons: FormButton[];
-	// Adds a row that asks for a label and appends a field with it (id `added:<n>`); `validate` returns an error message.
 	add?: {label: string; validate?: (label: string, values: FormValue[]) => string | undefined};
-	// Called for the chosen button with every field's current value; a returned message is shown and the form stays.
 	onButton: (id: string, values: FormValue[]) => string | undefined;
 	onCancel: () => void;
 	host?: ViewHost;
@@ -44,18 +41,11 @@ const errorOf = (fn: () => string | undefined): string | undefined => {
 	}
 };
 
-/**
- * A vertical form of one-line text fields over a row of buttons. ↑/↓ or Tab/Shift+Tab move between
- * rows, typing appends to the focused field, Backspace deletes, Enter goes to the next row (on the
- * buttons it presses the chosen one), ←/→ choose a button, Esc cancels.
- */
 export function Form({title, fields: initial, buttons, add, onButton, onCancel, host, maxLength = MAX}: FormProps) {
 	const {focused, columns} = useViewHost(host);
-	// Keys can arrive faster than renders (a paste, then Enter), so refs hold the truth.
 	const fieldsRef = useRef<FormField[]>(initial.map(f => ({...f})));
 	const rowRef = useRef(Math.max(0, initial.findIndex(f => !f.readOnly)));
 	const buttonRef = useRef(0);
-	// The label typed for a field being added; undefined when not adding.
 	const addingRef = useRef<string | undefined>(undefined);
 	const addedRef = useRef(0);
 	const done = useRef(false);
@@ -140,7 +130,6 @@ export function Form({title, fields: initial, buttons, add, onButton, onCancel, 
 		const active = focused && i === row;
 		const shown = sanitizeText(f.value, maxLength);
 		let text = shown;
-		// The end of a value being typed stays in view.
 		if (active) while (stringCells(text) > room - 1) text = [...text].slice(1).join('');
 		else text = truncateCells(text, room);
 		const label = truncateCells(sanitizeText(f.label, LABEL_MAX), labelWidth).padEnd(labelWidth);

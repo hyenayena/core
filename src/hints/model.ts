@@ -5,24 +5,18 @@ import {graphemes} from './width.js';
 import {argState, parseUsage, slotKey, splitUsage, type UsageToken} from './usage.js';
 
 export type UsageLine = {
-	// Text shown plain before the tokens (the command path, or the whole usage when it could not be parsed)
 	head: string;
 	tokens: UsageToken[];
-	// Index into `tokens` of the argument slot to emphasise, or -1
 	active: number;
-	// The documented argument under the cursor, or the option whose value is being typed
 	doc?: {label: string; description: string};
 };
 
 export type HintItem = {
 	insert: string;
 	label: string;
-	// Canonical name when `label` is an alias
 	via?: string;
 	description: string;
-	// Grapheme ranges of `label` that matched the typed token
 	ranges: Array<[number, number]>;
-	// `insert` extends the typed token as a case-insensitive prefix (ghost-capable)
 	prefix: boolean;
 	usage?: UsageLine;
 };
@@ -70,7 +64,6 @@ export function isPrefixCI(token: string, insert: string): boolean {
 
 type Node = CatalogCommand | CatalogSub;
 
-// A pattern option (`--<field>`) stands for any name with its prefix that no other option claims.
 const matchesPattern = (o: CatalogOption, name: string): boolean => {
 	const at = o.name.indexOf('<');
 	return at > 0 && name.length > at && name.startsWith(o.name.slice(0, at));
@@ -88,7 +81,6 @@ function buildUsage(
 	pending?: {option?: string},
 ): UsageLine | undefined {
 	const usage = node.usage;
-	// A synthesised name adds nothing to the command shown next to it
 	if (!usage || usage.trim() === '') return undefined;
 	const text = usage.trim();
 	const words = splitUsage(text);
@@ -140,7 +132,6 @@ function itemsFor<T extends {name: string; description: string}>(
 	});
 }
 
-/** Analyses a line whose cursor is at its end; never throws. */
 export function computeHints(catalog: Catalog, line: string): HintResult {
 	try {
 		return analyse(catalog, line);
@@ -212,7 +203,6 @@ function analyse(catalog: Catalog, line: string): HintResult {
 	const typedArgs = [...complete.slice(consumed).map(t => t.text), ...(endsWithSpace ? [] : [cur.text])];
 	const pending: {option?: string} = {};
 	const usageLine = nodeUsage(typedArgs, pending);
-	// Option names only: a value is never suggested.
 	const items =
 		cur.text.startsWith('-') && pending.option === undefined
 			? itemsFor<CatalogOption>(

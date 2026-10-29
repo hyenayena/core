@@ -1,7 +1,3 @@
-// Output of an assistant command, bounded for the model's context. The budget stays below the MCP
-// result limit of Claude Code (about 25k tokens), so a result never spills into a file the model must
-// read back. The end of the output is kept as well as the start: summaries, totals and errors are
-// usually printed last.
 export const MAX_OUTPUT_CHARS = 24 * 1024;
 export const MAX_OUTPUT_LINES = 600;
 

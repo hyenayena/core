@@ -37,18 +37,13 @@ export type AgentViewHandle = {done: Promise<void>; close: () => void};
 
 export type BridgeDeps = {
 	find: (name: string) => Command | undefined;
-	// Rebuilt by the caller on every call so plugin changes show up.
 	catalog: () => Catalog;
 	mode: () => AgentMode;
-	// Console output: the echo, the command's prints and the footer.
 	tee: (text: string, color?: string) => void;
 	clear: () => void;
 	exit: () => void;
-	// Without it agent commands get no `mount`. A refused view returns an already rejected `done`.
 	mountView?: (build: (control: MountControl) => UiElement, print: (text: string) => void) => AgentViewHandle;
-	// Runs after every agent command that reached execution, e.g. to refresh hints.
 	afterRun?: () => void;
-	// Around a run that reached execution: the start (echo printed) and the end (output and footer printed).
 	beforeRun?: () => void;
 	endRun?: () => void;
 	log: Logger;
@@ -65,7 +60,6 @@ function resolvePolicy(cmd: CatalogCommand | undefined, args: readonly string[])
 	return resolved;
 }
 
-// `ask` can only tighten what a command declares.
 const effective = (policy: AgentPolicy, mode: AgentMode): AgentPolicy => (mode === 'ask' && policy === 'safe' ? 'confirm' : policy);
 
 const clampTimeout = (ms: number | undefined): number =>
@@ -280,7 +274,6 @@ export function createCommandBridge(deps: BridgeDeps): CommandBridge {
 					},
 				)
 				.finally(() => {
-					// The view must be gone before the next assistant command can start.
 					ended = true;
 					closeViews(true);
 					busy = false;
@@ -293,7 +286,6 @@ export function createCommandBridge(deps: BridgeDeps): CommandBridge {
 			capturing = false;
 			if (outcome !== 'done') {
 				ended = true;
-				// Abort first so code resuming after `await mount` already sees the signal.
 				controller.abort();
 				closeViews(true);
 				return finish(outcome, output.text());
@@ -307,7 +299,6 @@ export function createCommandBridge(deps: BridgeDeps): CommandBridge {
 			}
 			return finish('ok', output.text());
 		} catch (error) {
-			// Nothing above should throw; the bridge still must not.
 			return finish('error', '', sanitizeText(error instanceof Error ? error.message : String(error), 200));
 		}
 	};

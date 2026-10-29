@@ -11,10 +11,8 @@ import {hangingRows} from './hanging.js';
 export interface ListPickerProps {
 	title: string;
 	empty: string;
-	// Verb for Enter in the key hint, e.g. "resume".
 	action: string;
 	items: PickerItem[];
-	// Applied before sanitising, e.g. a secret redactor; defaults to identity.
 	scrub?: (s: string) => string;
 	onPick: (id: string) => void;
 	close: () => void;
@@ -23,7 +21,6 @@ export interface ListPickerProps {
 
 const identity = (s: string) => s;
 
-/** A list in the console panel: ↑↓ select, Enter picks (and closes), Esc closes. */
 export function ListPicker({title, empty, action, items, scrub = identity, onPick, close, host}: ListPickerProps) {
 	const terminal = useWindowSize();
 	const {focused, columns} = useViewHost(host);
@@ -51,7 +48,6 @@ export function ListPicker({title, empty, action, items, scrub = identity, onPic
 	const width = Math.max(1, columns - 1);
 	const budget = Math.max(1, rows - 2);
 	const at = items[cursor];
-	// The selected item is shown in full over as many rows as it needs; the others stay one row each.
 	const selectedRows = at
 		? hangingRows('› ', `${clean(at.label)}${at.meta ? ` · ${clean(at.meta)}` : ''}`, width).slice(0, budget)
 		: [];

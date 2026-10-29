@@ -6,24 +6,17 @@ import {truncateCells} from '../hints/width.js';
 import {useViewHost} from '../view/use-view-host.js';
 
 export interface SecretInputProps {
-	// What is asked for, e.g. "Token for stripe-main". Sanitised.
 	label: string;
 	onSubmit: (value: string) => void;
 	onCancel: () => void;
 	host?: ViewHost;
 	maxLength?: number;
-	// Enter on an empty value submits '' (skip) instead of doing nothing.
 	optional?: boolean;
 }
 
 const MAX = 8192;
-// Pasted text arrives as one input; control characters (newlines of a paste included) are dropped.
 const CONTROL = new RegExp('[\\u0000-\\u001f\\u007f-\\u009f]', 'g');
 
-/**
- * A one-line input that never shows what is typed: only how many characters it holds.
- * The value lives in a ref, so it is in no rendered output and no React state.
- */
 export function SecretInput({label, onSubmit, onCancel, host, maxLength = MAX, optional = false}: SecretInputProps) {
 	const {focused, columns} = useViewHost(host);
 	const value = useRef('');

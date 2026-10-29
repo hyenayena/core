@@ -2,7 +2,6 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createRowCache, lineText, renderedLine, normalizeAnchor, scrollAnchor, visibleWindow, type Anchor, type Line} from '../../src/transcript/scroll.js';
 
-// Width 4: `rows(n)` is a line that wraps to n rows.
 const W = 4;
 let nextId = 0;
 const line = (rows: number, tag = String(nextId)): Line => ({id: nextId++, text: `${tag}`.padEnd(W * rows, '.')});

@@ -14,7 +14,6 @@ const endsMore = (t: string) => t.endsWith('…') || t.endsWith('...');
 const OPEN = new Set(['[', '<']);
 const CLOSE = new Set([']', '>']);
 
-// Splits on whitespace only outside `[…]` and `<…>`, so `[--name <n>]` stays one token.
 export function splitUsage(usage: string): string[] {
 	if (typeof usage !== 'string') return [];
 	const text = usage.slice(0, MAX_CHARS);
@@ -59,7 +58,6 @@ export function parseUsage(usage: string, pathLen: number): UsageToken[] {
 	return tokens;
 }
 
-/** Option names in a flag token (`[--name <n> | -H]`) and whether each takes a value. */
 export function optionNames(token: string): OptionName[] {
 	if (typeof token !== 'string') return [];
 	const words: {text: string; grouped: boolean}[] = [];
@@ -99,7 +97,6 @@ export function optionNames(token: string): OptionName[] {
 	return out;
 }
 
-/** The argument name of a usage slot: `<project>…` → `project`, `[model]` → `model`. */
 export function slotKey(text: string): string {
 	let s = typeof text === 'string' ? text.trim() : '';
 	for (;;) {
@@ -110,18 +107,15 @@ export function slotKey(text: string): string {
 	}
 }
 
-/** Optional and repeatable as the usage writes a slot. */
 export function slotFlags(text: string): {optional: boolean; repeatable: boolean} {
 	const s = typeof text === 'string' ? text.trim() : '';
 	return {optional: s.startsWith('['), repeatable: s.includes('…') || s.includes('...')};
 }
 
-// `undefined` defers to the usage.
 export type TakesValue = (name: string) => boolean | undefined;
 
 export type ArgState = {
 	active: number;
-	// The option whose value is being typed, if any.
 	option?: string;
 };
 

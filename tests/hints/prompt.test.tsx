@@ -39,7 +39,6 @@ function setup(extra: Command[] = sample, size = {columns: 80, rows: 40}) {
 	return h;
 }
 
-// The harness frame starts with the <Static> output; the live part begins at the prompt row
 function liveLines(h: ReturnType<typeof setup>): string[] {
 	const lines = h.lastFrame().split('\n');
 	let at = 0;
@@ -207,7 +206,6 @@ test('every line fits a narrow terminal, including wide characters', async () =>
 	const lines = liveLines(h);
 	assert.ok(lines.length > 1);
 	if (width) {
-		// eslint-disable-next-line no-control-regex
 		const plain = (l: string) => l.replace(/\u001b\[[0-9;]*m/g, '');
 		for (const l of lines) assert.ok(width(plain(l)) <= 24, l);
 	}

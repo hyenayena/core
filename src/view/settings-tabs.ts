@@ -24,7 +24,6 @@ function validAction(raw: unknown): SettingAction | undefined {
 	return s as SettingAction;
 }
 
-/** Settings tabs contributed by commands, sorted by title; malformed entries are dropped. */
 export function collectSettingsTabs(commands: Command[]): SettingsTab[] {
 	const tabs: SettingsTab[] = [];
 	for (const command of commands) {

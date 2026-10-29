@@ -14,14 +14,12 @@ export type Segment = {
 export type HintRow = {
 	kind: 'item' | 'usage' | 'doc' | 'footer';
 	selected?: boolean;
-	// Index in `h.items`, set on item rows
 	item?: number;
 	segments: Segment[];
 };
 
 export type HintUi = {
 	sel: number;
-	// Defaults to colorEnabled()
 	color?: boolean;
 };
 
@@ -140,7 +138,6 @@ function docRow(doc: {label: string; description: string}, columns: number): Hin
 	return {kind: 'doc', segments: clip(segments, columns - 1)};
 }
 
-/** Rows for the hint list under the prompt; recomputed from `size` on every call, never throws. */
 export function layoutHints(
 	h: HintResult,
 	ui: HintUi,

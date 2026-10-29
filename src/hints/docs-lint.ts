@@ -44,7 +44,6 @@ function checkNode(node: Node, names: readonly string[], problems: string[]): vo
 	}
 }
 
-/** Problems with a command's documentation (descriptions, usages, argument and option docs); empty when it is fine. */
 export function checkCommandDocs(command: Command): string[] {
 	const catalog = buildCatalog([command]);
 	const cmd = catalog.commands[0];

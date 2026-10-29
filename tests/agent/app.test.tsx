@@ -13,7 +13,6 @@ import type {Command, CommandContext, MountControl} from '../../../../src/api.js
 
 const ENTER = '\r';
 
-// Prefs are saved when a test changes them, so they go to a folder of their own.
 const prefsDir = mkdtempSync(path.join(tmpdir(), 'yena-core-agent-'));
 after(() => rmSync(prefsDir, {recursive: true, force: true}));
 
@@ -174,7 +173,6 @@ function peek(name: string, probe: Probe): Command {
 	};
 }
 
-// A chat in the main area, its control kept, plus extra commands.
 function boot(size: {columns: number; rows: number}, extra: Command[] = []) {
 	const seen: {chat?: CommandContext; chatControl?: MountControl; act?: CommandContext} = {};
 	const commands: Command[] = [

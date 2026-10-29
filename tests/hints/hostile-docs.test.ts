@@ -57,7 +57,6 @@ const hostile = buildCatalog([
 	},
 ]);
 
-// An unreadable policy fails closed to confirm, never to the parent's looser one.
 test('hostile docs never throw and are sanitised and capped in the catalog', () => {
 	const h = hostile.byName.get('h')!;
 	assert.deepEqual(h.args.map(a => a.name), ['ok', 'big']);

@@ -1,5 +1,4 @@
 export type MouseInputEvent = {
-	// `drag`: the pointer moved while a button is held (button-event tracking, mode 1002).
 	kind: 'press' | 'release' | 'wheel' | 'drag';
 	button: 'left' | 'middle' | 'right' | 'none';
 	wheel?: 'up' | 'down';
@@ -10,10 +9,8 @@ export type MouseInputEvent = {
 	ctrl: boolean;
 };
 
-// x and y are the terminal's 1-based cells; `release` is the SGR `m` final.
 export type RawMouse = {code: number; x: number; y: number; release: boolean};
 
-// `flushable`: the held part (a lone ESC or `ESC[`) comes back as text from `flush`; anything else held is dropped.
 export type TokenizerResult = {text: string; events: RawMouse[]; hold: 'none' | 'short' | 'long'; flushable: boolean};
 
 export type MouseTokenizer = {
@@ -42,7 +39,6 @@ const code = (ch: string) => ch.codePointAt(0)!;
 export function createMouseTokenizer(): MouseTokenizer {
 	let x10 = false;
 	let inPaste = false;
-	// Progress through PASTE_START (outside a paste) or PASTE_END (inside one) over the text emitted so far.
 	let marker = 0;
 	let state: Pending | undefined;
 	let seq = '';
@@ -70,7 +66,6 @@ export function createMouseTokenizer(): MouseTokenizer {
 		seq = '';
 	};
 
-	// A broken report is swallowed up to its final byte so that no part of it reaches text input.
 	const discard = () => {
 		state = {kind: 'discard'};
 		seq = '';
@@ -110,7 +105,6 @@ export function createMouseTokenizer(): MouseTokenizer {
 						seq += ch;
 						i++;
 					} else {
-						// Not a CSI (Alt+key, a lone Esc): the ESC is ordinary input, the character is parsed again.
 						emit(out, seq);
 						reset();
 					}
@@ -157,7 +151,6 @@ export function createMouseTokenizer(): MouseTokenizer {
 						i++;
 						reset();
 					} else {
-						// ESC, a control or non-ASCII text cannot belong to the report: it is parsed again.
 						reset();
 					}
 					break;
@@ -215,7 +208,6 @@ export function decode(raw: RawMouse, columns: number, rows: number): MouseInput
 	}
 	const button = (['left', 'middle', 'right', 'none'] as const)[low]!;
 	if (base & 32) {
-		// Motion: reported with a held button only; a move with none held (mode 1003) is dropped.
 		if (raw.release || low === 3) return undefined;
 		return {kind: 'drag', button, x, y, ...mods};
 	}

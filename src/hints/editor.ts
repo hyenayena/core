@@ -3,7 +3,6 @@ import {graphemes} from './width.js';
 
 export type KeyInput = {
 	input: string;
-	// Bracketed paste text (from usePaste); always plain text, never a key
 	paste?: string;
 	upArrow?: boolean;
 	downArrow?: boolean;
@@ -28,14 +27,12 @@ export type Cycle = {
 	len: number;
 	original: string;
 	items: HintItem[];
-	// Hint result at the moment of the first Tab, used to keep rendering the frozen list
 	result: HintResult;
 };
 
 export type PromptState = {
 	value: string;
 	cursor: number;
-	// -1 means "editing a new line", otherwise an offset from the end of history
 	historyIndex: number;
 	sel: number;
 	navigated: boolean;
@@ -50,9 +47,7 @@ export type StepEnv = {
 
 export type StepResult = {
 	state: PromptState;
-	// 'tab': Tab with nothing to complete (the app uses it to open or close the console).
 	effect?: 'submit' | 'interrupt' | 'tab';
-	// The line to execute, set with the 'submit' effect
 	line?: string;
 };
 
@@ -68,7 +63,6 @@ export const initialState: PromptState = {
 const MAX_INSERT = 8192;
 const ESC = 0x1b;
 
-// ZWJ and ZWNJ stay: emoji sequences and some scripts need them
 function isInvisible(c: number): boolean {
 	return (
 		(c >= 0x202a && c <= 0x202e) ||
@@ -101,7 +95,6 @@ function skipString(s: string, from: number): number {
 	return s.length;
 }
 
-/** Text safe to insert in the line: whitespace controls become spaces, escapes and other controls are dropped. */
 export function sanitizeInsert(input: string): string {
 	if (typeof input !== 'string' || input === '') return '';
 	const s = input.slice(0, MAX_INSERT);
@@ -181,7 +174,6 @@ function clampCursor(s: PromptState): number {
 	return Math.min(Math.max(0, Number.isFinite(s.cursor) ? s.cursor : 0), s.value.length);
 }
 
-/** The hint result that accepts keys, or undefined when hints are inactive. */
 function activeResult(s: PromptState, env: StepEnv): HintResult | undefined {
 	if (s.historyIndex !== -1 || s.dismissed) return undefined;
 	if (s.value.trim() === '' || s.cursor !== s.value.length) return undefined;
@@ -189,7 +181,6 @@ function activeResult(s: PromptState, env: StepEnv): HintResult | undefined {
 	return h && h.items.length > 0 ? h : undefined;
 }
 
-/** Item-less result that still carries a usage line; shown but never interactive. */
 function usageOnlyResult(s: PromptState, env: StepEnv): HintResult | undefined {
 	if (s.historyIndex !== -1 || s.dismissed) return undefined;
 	if (s.value.trim() === '' || s.cursor !== s.value.length) return undefined;
@@ -206,14 +197,12 @@ function validCycle(s: PromptState): Cycle | undefined {
 	return c;
 }
 
-/** What the list should render: the frozen list while cycling, otherwise the live result. */
 export function visibleHints(s: PromptState, env: StepEnv): HintResult | undefined {
 	const c = validCycle(s);
 	if (c) return {...c.result, items: c.items};
 	return activeResult(s, env) ?? usageOnlyResult(s, env);
 }
 
-/** Dim text to show after the cursor, or '' when there is no ghost. */
 export function ghostText(s: PromptState, env: StepEnv): string {
 	if (validCycle(s)) return '';
 	const h = activeResult(s, env);
@@ -275,7 +264,6 @@ function history(s: PromptState, env: StepEnv, up: boolean): PromptState {
 	const next = up
 		? Math.min(s.historyIndex + 1, list.length - 1)
 		: Math.max(s.historyIndex - 1, -1);
-	// Without history, or when pressing Down on a fresh line, the typed text is kept
 	if (next === s.historyIndex) return s;
 	const text = next === -1 ? '' : (list[list.length - 1 - next] ?? '');
 	return reset(s, {value: text, cursor: text.length, historyIndex: next});
@@ -288,7 +276,6 @@ function isSpecial(k: KeyInput): boolean {
 	);
 }
 
-/** Total pure reducer for the prompt: any key in any state yields a valid state. */
 export function step(s: PromptState, k: KeyInput, env: StepEnv): StepResult {
 	try {
 		return run(s, k, env);
@@ -364,7 +351,6 @@ function run(s: PromptState, k: KeyInput, env: StepEnv): StepResult {
 	if (k.leftArrow) return {state: reset(s, {cursor: prevBoundary(s.value, cursor)})};
 	if (k.home) return {state: reset(s, {cursor: 0})};
 
-	// Most terminals send Backspace as DEL, which Ink reports as `delete`
 	if (k.backspace || k.delete) {
 		if (cursor === 0) return {state: s};
 		const from = prevBoundary(s.value, cursor);
@@ -378,7 +364,6 @@ function run(s: PromptState, k: KeyInput, env: StepEnv): StepResult {
 	return {state: s};
 }
 
-/** Moves the cursor to grapheme `graphemeIndex` (clamped), like a cursor key; never throws. */
 export function clickCursor(s: PromptState, graphemeIndex: number): PromptState {
 	try {
 		const b = boundaries(s.value);
@@ -389,11 +374,6 @@ export function clickCursor(s: PromptState, graphemeIndex: number): PromptState 
 	}
 }
 
-/**
- * Accepts the visible hint item `itemIndex` like Enter after navigation (no cycle, never submits).
- * During a Tab cycle the item replaces the text typed before the first Tab and the cycle ends.
- * Returns `s` unchanged when there is no such item; never throws.
- */
 export function clickHint(s: PromptState, itemIndex: number, env: StepEnv): PromptState {
 	try {
 		const h = visibleHints(s, env);

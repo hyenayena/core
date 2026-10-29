@@ -2,10 +2,6 @@ import {wrapRows} from '../transcript/wrap.js';
 
 export type TailRows = {rows: string[]; hiddenLines: number};
 
-/**
- * The last `rows` screen rows of `lines` wrapped to `width`. When something is cut, the first row
- * is the `… N earlier lines` indicator and `hiddenLines` counts the lines not shown in full.
- */
 export function tailRows(lines: readonly string[], width: number, rows: number): TailRows {
 	const budget = Number.isFinite(rows) ? Math.max(0, Math.floor(rows)) : 0;
 	const wrapped = lines.map(line => wrapRows(line, width));

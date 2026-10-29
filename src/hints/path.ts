@@ -7,7 +7,6 @@ function findSub(subs: readonly CatalogSub[], token: string): CatalogSub | undef
 	return subs.find(s => s.name === token) ?? subs.find(s => s.aliases.includes(token));
 }
 
-/** Follows the subcommands named by `args` (name before alias); stops at the first token that matches none. */
 export function walkPath(cmd: CatalogCommand, args: readonly string[]): Walk {
 	const path: CatalogSub[] = [];
 	let subs = cmd.subs;
@@ -21,7 +20,6 @@ export function walkPath(cmd: CatalogCommand, args: readonly string[]): Walk {
 	return {path, rest: args.slice(i)};
 }
 
-/** The deepest policy declared on the path, otherwise the command's. */
 export function policyOf(cmd: CatalogCommand, path: readonly CatalogSub[]): AgentPolicy {
 	for (let i = path.length - 1; i >= 0; i--) {
 		const agent = path[i]!.agent;
@@ -30,7 +28,6 @@ export function policyOf(cmd: CatalogCommand, path: readonly CatalogSub[]): Agen
 	return cmd.agent;
 }
 
-/** For a line that ends on core's own `help` subcommand: the path to describe (parent path plus the rest). */
 export function helpTarget(catalog: Catalog, name: string, args: readonly string[]): string[] | undefined {
 	const cmd = catalog.byName.get(name);
 	if (!cmd) return undefined;

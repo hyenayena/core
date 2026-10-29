@@ -1,17 +1,14 @@
 import {cellWidth, graphemes} from '../hints/width.js';
 
 export type InputWindowRow = {
-	// UTF-16 offset of the start of the row in the text.
 	offset: number;
 	before: string;
 	cell: string | null;
 	after: string;
-	// Kept for callers of the old one-row-per-line window; wrapped rows are never cut.
 	leftCut: boolean;
 	rightCut: boolean;
 };
 
-/** One screen row of a logical line: graphemes [start, end) of `gs`. */
 type Segment = {gs: string[]; start: number; end: number; offset: number; lastOfLine: boolean};
 
 const lengthOf = (gs: readonly string[], from: number, to: number) => {
@@ -20,10 +17,6 @@ const lengthOf = (gs: readonly string[], from: number, to: number) => {
 	return n;
 };
 
-/**
- * Splits a line into rows of at most `width` cells, breaking after the last space that fits
- * (a word longer than a row is cut by cells).
- */
 function wrapLine(gs: string[], width: number, lineOffset: number): Segment[] {
 	const out: Segment[] = [];
 	let start = 0;
@@ -50,8 +43,6 @@ function wrapLine(gs: string[], width: number, lineOffset: number): Segment[] {
 	}
 }
 
-// One cell stays free on every row, so a cursor after the last grapheme always fits and the
-// row count does not depend on where the cursor is.
 const wrapWidth = (maxCells: number) => Math.max(1, (Math.floor(maxCells) || 1) - 1);
 
 function segments(text: string, maxCells: number): Segment[] {
@@ -65,7 +56,6 @@ function segments(text: string, maxCells: number): Segment[] {
 	return out;
 }
 
-/** The segment holding the cursor and the cursor's grapheme index in its line. */
 function locate(segs: Segment[], text: string, cursor: number): {index: number; at: number} {
 	const target = Math.min(Math.max(0, Math.floor(cursor) || 0), text.length);
 	for (let s = 0; s < segs.length; s++) {
@@ -73,7 +63,6 @@ function locate(segs: Segment[], text: string, cursor: number): {index: number; 
 		const segEnd = seg.offset + lengthOf(seg.gs, seg.start, seg.end);
 		const inside = target < segEnd || (seg.lastOfLine && target <= segEnd);
 		if (target < seg.offset || !inside) continue;
-		// A cursor inside a grapheme cluster snaps to its start.
 		let pos = seg.offset;
 		let at = seg.end;
 		for (let g = seg.start; g < seg.end; g++) {
@@ -98,15 +87,10 @@ function shown(text: string, cursor: number, maxCells: number, maxRows: number) 
 	return {segs: segs.slice(first, first + rows), cursorRow: index - first, at};
 }
 
-/** Screen rows a multi-line input takes when wrapped to `maxCells`, before any limit on rows. */
 export function inputRowCount(text: string, maxCells: number): number {
 	return segments(text, maxCells).length;
 }
 
-/**
- * Rows of a multi-line input wrapped to `maxCells`, at most `maxRows` of them around the cursor;
- * shared by rendering and click mapping.
- */
 export function inputWindow(text: string, cursor: number, maxCells: number, maxRows: number): InputWindowRow[] {
 	const {segs, cursorRow, at} = shown(text, cursor, maxCells, maxRows);
 	return segs.map((seg, r) => {
@@ -122,11 +106,6 @@ export function inputWindow(text: string, cursor: number, maxCells: number, maxR
 	});
 }
 
-/**
- * Text offset for a click on shown row `row` (0-based) at `cell` (0-based within the text area).
- * Past the end of a row it gives the end of its line, or the last grapheme of a wrapped row (so the
- * cursor stays on that row); undefined when the row is not shown.
- */
 export function offsetAtCell(
 	text: string,
 	cursor: number,

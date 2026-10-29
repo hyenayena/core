@@ -1,4 +1,3 @@
-/** First line of a window of `size` lines that keeps `focus` visible, with `anchor` (e.g. its label) when it fits. */
 export function windowStart(total: number, size: number, focus: number, anchor: number = focus): number {
 	if (total <= size) return 0;
 	const max = total - size;

@@ -27,7 +27,6 @@ const plugin: Command[] = [
 	{name: `${RLO}rtl`, description: 'dropped by bidi', run: () => {}},
 ];
 
-// Everything Ink itself emits is SGR or cursor/erase control sequences
 const INK_CSI = new RegExp(`${ESC}\\[[0-9;?]*[A-Za-z]`, 'g');
 
 function assertClean(output: string) {

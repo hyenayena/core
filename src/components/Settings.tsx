@@ -62,7 +62,6 @@ let nextOpened = 0;
 
 export default function Settings({tabs: initial, control, reload}: {tabs: SettingsTab[]; control: MountControl; reload?: () => SettingsTab[]}) {
 	const [tabs, setTabs] = useState(initial);
-	// The view of an action row, shown in place of the list until it closes.
 	const [opened, setOpened] = useState<Opened | null>(null);
 	const {focused, columns} = useViewHost(control.host);
 	const terminal = useWindowSize();
@@ -132,7 +131,6 @@ export default function Settings({tabs: initial, control, reload}: {tabs: Settin
 		}
 	}, [tab, current]);
 
-	// Saving keeps the window open; only Esc closes it.
 	const save = (row: Option) => {
 		if ('action' in row) return openAction(row.action);
 		const option = row.setting.options[row.index];

@@ -3,7 +3,6 @@ import type {LineLayout} from './selection.js';
 
 export const MAX_ACTIONS = 200;
 
-/** The valid actions of a print, at most `MAX_ACTIONS`; undefined when none is left. */
 export function cleanActions(actions: unknown): PrintAction[] | undefined {
 	if (!Array.isArray(actions)) return undefined;
 	const out: PrintAction[] = [];
@@ -16,7 +15,6 @@ export function cleanActions(actions: unknown): PrintAction[] | undefined {
 	return out.length > 0 ? out : undefined;
 }
 
-/** The action of the printed line that holds `offset` of the line's plain text; pass the line's layout for the width shown (`renderedLine`). */
 export function actionAt(line: {actions?: readonly PrintAction[] | undefined}, layout: LineLayout, offset: number): PrintAction | undefined {
 	if (!line.actions) return undefined;
 	let index = 0;

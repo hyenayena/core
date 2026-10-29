@@ -144,7 +144,6 @@ test('BrailleBar: rows at a narrow width, NO_COLOR uses inverse for fail', async
 		await n.settle();
 		assert.ok(!new RegExp(ESC + '\\[(3[0-7]|9[0-7])m').test(n.lastFrame()));
 		n.unmount();
-		// The harness runs without chalk colour levels, so inspect the element props instead of SGR.
 		type El = React.ReactElement<{children?: El | El[]; inverse?: boolean; color?: string; dimColor?: boolean}>;
 		const root = BrailleBar({states, width: 5}) as El;
 		const rows = ([] as El[]).concat(root.props.children ?? []);

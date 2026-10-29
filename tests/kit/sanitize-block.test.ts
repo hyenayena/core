@@ -75,7 +75,6 @@ test('sanitizeMultilineInput keeps newline and tab, folds CR', () => {
 	assert.equal(sanitizeMultilineInput(`a\tb\r\nc\rd${ESC}[31me‮f`), 'a\tb\nc\nde' + 'f');
 });
 
-// Format characters the old core list missed (the probe set).
 const PROBE = [0x180e, 0x206a, 0x206f, 0x0600, 0x070f, 0x08e2, 0x110bd, 0x1d173, 0x1d17a, 0xe0001, 0xe0020];
 
 test('every probe code point is stripped by all three sanitizers', () => {

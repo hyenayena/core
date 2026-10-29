@@ -2,7 +2,6 @@ import type {PrintAction, RenderedPrint} from '../../../../src/api.js';
 import {cleanActions} from './actions.js';
 import {wrapRows} from './wrap.js';
 
-// `actions`: clicks on its printed lines that copy text; `render`: the text for a width (both `PrintOptions` of the host API).
 export type Line = {
 	id: number;
 	text: string;
@@ -13,13 +12,8 @@ export type Line = {
 
 type Layout = {text: string; actions?: readonly PrintAction[] | undefined};
 
-// One layout per line: rows, selection and clicks all ask for it at the same width.
 const layouts = new WeakMap<Line, {width: number; layout: Layout}>();
 
-/**
- * The text and actions of a line laid out for `width`. A `render` that throws or returns neither a string
- * nor `{text}` falls back to `text` and `actions`; a string result keeps `actions`.
- */
 export function renderedLine(line: Line, width: number): Layout {
 	if (!line.render) return line;
 	const hit = layouts.get(line);
@@ -40,12 +34,10 @@ export function renderedLine(line: Line, width: number): Layout {
 
 export const lineText = (line: Line, width: number): string => renderedLine(line, width).text;
 
-/** The logical line at the bottom of the view, its rows hidden below, and its row count when set. */
 export type Anchor = {id: number; hidden: number; of: number};
 
 export type RowsOf = (line: Line, width: number) => string[];
 
-// `id` is the logical line and `row` the row inside it, as wrapped for this width.
 export type VisibleRow = {key: string; id: number; row: number; text: string; color?: string | undefined};
 
 type Position = {i: number; h: number};
@@ -92,14 +84,12 @@ function toAnchor(lines: Line[], p: Position | null, rowsOf: RowsOf, width: numb
 	return {id: lines[p.i]!.id, hidden: p.h, of: count(lines, p.i, rowsOf, width)};
 }
 
-/** Rows from the top of the transcript down to the bottom row of `p`, counted up to `limit`. */
 function rowsAbove(lines: Line[], p: Position, rowsOf: RowsOf, width: number, limit: number): number {
 	let n = count(lines, p.i, rowsOf, width) - p.h;
 	for (let j = p.i - 1; j >= 0 && n < limit; j--) n += count(lines, j, rowsOf, width);
 	return n;
 }
 
-/** The position that shows the first row at the top of a full view; null when everything fits. */
 function topPosition(lines: Line[], rowsOf: RowsOf, width: number, viewport: number): Anchor | null {
 	const view = Math.max(1, viewport);
 	let cum = 0;
@@ -143,7 +133,6 @@ export function visibleWindow(
 	return {rows: out, newer};
 }
 
-/** Moves the view by `delta` rows: positive scrolls back, negative forward; null follows the bottom. */
 export function scrollAnchor(
 	lines: Line[],
 	anchor: Anchor | null,
@@ -181,7 +170,6 @@ export function scrollAnchor(
 	return toAnchor(lines, {i, h}, rowsOf, width);
 }
 
-/** Repairs an anchor after trimming, resizing or a smaller view; returns the same object when it still holds. */
 export function normalizeAnchor(
 	lines: Line[],
 	anchor: Anchor | null,

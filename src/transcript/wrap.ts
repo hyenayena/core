@@ -10,21 +10,15 @@ const SGR = new RegExp(`^${ESC}\\[([0-9;:]{0,64})m$`);
 const RESET = String.fromCharCode(27) + '[0m';
 const MAX_CARRY = 32;
 
-/** Cell width of text that may contain escape sequences, which take no cells. */
 export function styledCells(text: string): number {
 	if (typeof text !== 'string' || text === '') return 0;
 	return stringCells(text.replace(TOKEN, ''));
 }
 
-/** The text without its escape sequences: what the screen shows, as characters. */
 export function stripStyles(text: string): string {
 	return typeof text === 'string' ? text.replace(TOKEN, '') : '';
 }
 
-/**
- * The cells [from, to) of a styled row. Every SGR sequence is kept (they take no cells), so the
- * styles stay right; other escapes are dropped. Ends with a reset when it carried any style.
- */
 export function sliceStyledCells(text: string, from: number, to: number): string {
 	if (typeof text !== 'string' || text === '' || !(to > from)) return '';
 	let out = '';
@@ -66,14 +60,9 @@ function activeAfter(start: string[], pieces: Piece[]): string[] {
 }
 
 export type WrapOptions = {
-	// 'word' breaks after spaces and drops the space at a break; 'char' breaks anywhere and keeps every grapheme.
 	mode?: 'word' | 'char';
 };
 
-/**
- * Wraps one logical line to rows of at most `width` cells. SGR sequences take no cells and
- * are replayed at the start of every following row; other escape sequences stay where they are.
- */
 export function wrapRows(text: string, width: number, options: WrapOptions = {}): string[] {
 	const charMode = options.mode === 'char';
 	if (typeof text !== 'string' || text === '') return [''];
@@ -147,7 +136,6 @@ export function wrapRows(text: string, width: number, options: WrapOptions = {})
 	return rows;
 }
 
-/** Wraps each line separately and flattens the rows; an empty line gives one empty row. */
 export function wrapLines(lines: readonly string[], width: number, options: WrapOptions = {}): string[] {
 	return lines.flatMap(line => wrapRows(line, width, options));
 }

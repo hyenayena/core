@@ -7,7 +7,6 @@ function codePoints(s: string): string[] {
 	return Array.from(String(s).slice(0, MAX_UNITS * 4).normalize('NFC').toLowerCase()).slice(0, MAX_UNITS);
 }
 
-/** Optimal string alignment distance (Levenshtein plus adjacent transposition). */
 function distance(a: string[], b: string[]): number {
 	const w = b.length + 1;
 	const d: number[] = new Array((a.length + 1) * w).fill(0);
@@ -30,12 +29,10 @@ function distance(a: string[], b: string[]): number {
 	return d[a.length * w + b.length] as number;
 }
 
-/** The single best command name for a mistyped token, if any is close enough. */
 export function nearest(catalog: Catalog, typed: string): string | undefined {
 	return nearestName(catalog.commands.map(c => c.name), typed);
 }
 
-/** The single best of `names` for a mistyped token, if any is close enough. */
 export function nearestName(names: readonly string[], typed: string): string | undefined {
 	try {
 		const t = codePoints(typed);

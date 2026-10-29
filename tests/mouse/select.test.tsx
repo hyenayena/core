@@ -5,7 +5,6 @@ import {tmpdir} from 'node:os';
 import path from 'node:path';
 import React from 'react';
 import {Text} from 'ink';
-// Ink's own chalk: the harness has no colour level, so the highlight would not show in the output.
 import chalk from 'chalk';
 import App from '../../src/app.js';
 import {createRegistry} from '../../src/commands.js';
@@ -16,7 +15,6 @@ import {createFakeStdout, createFakeTty, mountHarness} from '../testkit.js';
 import type {Command, MountControl, PrintOptions} from '../../../../src/api.js';
 
 const ESC = '\x1b';
-// 1-based cells, as the terminal sends them.
 const press = (x: number, y: number) => `${ESC}[<0;${x};${y}M`;
 const drag = (x: number, y: number) => `${ESC}[<32;${x};${y}M`;
 const release = (x: number, y: number) => `${ESC}[<0;${x};${y}m`;
@@ -47,7 +45,6 @@ function setup() {
 		h.press(text);
 		await h.settle(40);
 	};
-	// The 1-based screen row showing `text`.
 	const rowOf = (text: string): number => {
 		const at = h.lastFrame().split('\n').findIndex(l => l.includes(text));
 		assert.ok(at >= 0, `${text} is on the screen`);
@@ -77,7 +74,6 @@ test('dragging over the transcript selects, highlights and copies the text', asy
 	await send(press(7, y1));
 	await send(drag(10, y1));
 	await send(drag(6, y2));
-	// The highlight is drawn while dragging.
 	assert.ok(h.lastFrame().includes(`${INVERSE}beta gamma`), 'inverse highlight');
 	await send(release(6, y2));
 	assert.ok(copied(h.allOutput(), 'beta gamma\nsecond'), 'copied with OSC 52');
@@ -125,10 +121,8 @@ test('the launcher folder gets the copied text as a file', () => {
 		assert.equal(files.length, 1);
 		assert.match(files[0]!, /^\d+-\d+-\d+\.txt$/);
 		assert.equal(readFileSync(path.join(target, files[0]!), 'utf8'), 'hello');
-		// A relative folder is refused; OSC 52 still went out.
 		assert.equal(copyToClipboard({write: () => true}, 'x', {[CLIPBOARD_DIR_ENV]: 'rel'}), true);
 		assert.equal(existsSync('rel'), false);
-		// Without a working terminal the folder alone is enough.
 		const broken = {
 			write: () => {
 				throw new Error('closed');

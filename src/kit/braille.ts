@@ -3,7 +3,6 @@ import {windowStart} from './window.js';
 
 export type DotState = 'pending' | 'pass' | 'fail' | 'skip';
 
-/** Dot bits in fill order: left column top to bottom, then right column. */
 export const BRAILLE_FILL: readonly number[] = [0x01, 0x02, 0x04, 0x40, 0x08, 0x10, 0x20, 0x80];
 
 export type BrailleCell = {glyph: string; tone: Tone; done: number; capacity: number};
@@ -61,7 +60,6 @@ export function brailleRows(
 
 const SGR_CODE: Partial<Record<Tone, number>> = {add: 32, del: 31, warn: 33, dim: 2};
 
-/** One line of glyphs; hiddenBefore/After and row breaks are the caller's business. */
 export function brailleText(cells: readonly BrailleCell[], options: {color: boolean}): string {
 	if (!options.color) return cells.map(cell => cell.glyph).join('');
 	const esc = String.fromCharCode(27);

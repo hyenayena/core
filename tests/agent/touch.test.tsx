@@ -10,7 +10,6 @@ import {createFakeStdout, createFakeTty, mountHarness} from '../testkit.js';
 import type {Command, CommandContext} from '../../../../src/api.js';
 
 const ESC = '\x1b';
-// x and y are 1-based, as the terminal sends them.
 const wheelDown = (x: number, y: number) => `${ESC}[<65;${x};${y}M`;
 const click = (x: number, y: number) => `${ESC}[<0;${x};${y}M`;
 const GRACE = 400;

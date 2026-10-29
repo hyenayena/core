@@ -25,7 +25,6 @@ function assistantTab(): SettingsTab {
 	};
 }
 
-/** Settings tabs in display order: the commands' own, then core's Assistant tab. */
 export const settingsTabs = (commands: Command[]): SettingsTab[] => [...collectSettingsTabs(commands), assistantTab()];
 
 function appearanceTab(): SettingsTab {
@@ -76,7 +75,6 @@ function printHelp(catalog: Catalog, path: readonly string[], ctx: CommandContex
 	for (const line of helpLines(catalog, path)) ctx.print(line);
 }
 
-/** Builds the command list: core's own commands plus the ones yena provides. */
 export function createRegistry(extra: Command[]): Registry {
 	const commands: Command[] = [
 		{
@@ -128,7 +126,6 @@ export function createRegistry(extra: Command[]): Registry {
 		},
 	];
 
-	// Cached so a command keeps one identity; a prototype link keeps getters such as `settings` live.
 	const wrapped = new WeakMap<Command, Command>();
 	const withHelp = (original: Command, name: string): Command => {
 		let w = wrapped.get(original);

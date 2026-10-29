@@ -4,13 +4,12 @@ const ESC = 0x1b;
 const BEL = 0x07;
 const ST_C1 = 0x9c;
 
-const STRING_INTRODUCERS = new Set([0x5d, 0x50, 0x5f, 0x5e, 0x58]); // ] P _ ^ X
+const STRING_INTRODUCERS = new Set([0x5d, 0x50, 0x5f, 0x5e, 0x58]);
 const C1_STRING_INTRODUCERS = new Set([0x9d, 0x90, 0x9f, 0x9e, 0x98]);
 
 const FORMAT = /^\p{Cf}$/u;
 
 type Options = {
-	// How CR is treated: a space, dropped (CRLF folds to LF), or turned into a newline.
 	cr: 'space' | 'drop' | 'newline';
 	newline: 'space' | 'keep';
 	tab: 'space' | 'keep' | 'expand';
@@ -33,7 +32,6 @@ function skipCsi(s: string, i: number): number {
 	return j;
 }
 
-// An unterminated string sequence consumes the remainder.
 function skipString(s: string, i: number): number {
 	for (let j = i; j < s.length; j++) {
 		const c = s.charCodeAt(j);
@@ -43,7 +41,6 @@ function skipString(s: string, i: number): number {
 	return s.length;
 }
 
-/** Linear single-pass removal of escape sequences and unsafe characters. */
 function clean(s: string, o: Options): string {
 	const out: string[] = [];
 	let i = 0;
@@ -127,7 +124,6 @@ function clean(s: string, o: Options): string {
 	return out.join('');
 }
 
-/** Makes untrusted text safe to render on one terminal line; never throws. */
 export function sanitizeText(input: unknown, maxCodePoints: number): string {
 	if (typeof input !== 'string') return '';
 	const max = Math.floor(maxCodePoints);
@@ -161,12 +157,10 @@ function run(input: unknown, o: Options): string {
 	}
 }
 
-/** Multi-line display text: keeps \n, expands tabs to 4 spaces, keeps ZWJ; never throws. */
 export function sanitizeBlock(input: unknown): string {
 	return run(input, BLOCK);
 }
 
-/** Editable input: keeps \n and \t, folds CR and CRLF to \n; never throws. */
 export function sanitizeMultilineInput(input: unknown): string {
 	return run(input, INPUT);
 }

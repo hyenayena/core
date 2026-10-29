@@ -38,7 +38,6 @@ test('Form: typing edits the focused field, rows move with arrows and Tab, a but
 	assert.match(h.lastFrame(), /New task/);
 	assert.match(h.lastFrame(), /what to do/);
 	assert.match(h.lastFrame(), /\[ Cancel \] {2}\[ Save \]/);
-	// The first editable field has the focus; the read-only one ignores typing.
 	h.press(BACKSPACE);
 	await h.settle();
 	h.press('2');
@@ -156,7 +155,6 @@ test('Form: the add row asks for a name, validates it and appends an empty field
 	await h.settle();
 	await h.settle();
 	assert.match(h.lastFrame(), /› Priority\s+high/);
-	// Esc while naming stops adding without leaving the form.
 	h.press(DOWN);
 	await h.settle();
 	h.press('\r');

@@ -18,7 +18,6 @@ const SHIFT_UP = `${ESC}[1;2A`;
 const PG_UP = `${ESC}[5~`;
 const CTRL_T = '\x14';
 
-// At width 40 each row holds exactly ten 4-cell words, so row r starts with `${tag}${r}0`.
 const paragraph = (tag: string, rows: number) =>
 	Array.from({length: rows * 10}, (_, i) => `${tag}${String(i).padStart(2, '0')}`).join(' ');
 
@@ -48,7 +47,6 @@ function setup(size = {columns: 40, rows: 12}, extra: Command[] = []) {
 		await h.settle(ms);
 	};
 	const frame = () => h.lastFrame().replace(ANSI, '').split('\n');
-	// Transcript rows: everything above the view line, without the hint.
 	const transcript = () => {
 		const lines = frame();
 		const end = lines.findIndex(l => l.startsWith('CHAT'));
