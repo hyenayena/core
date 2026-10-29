@@ -3,6 +3,7 @@ import {createCommandBridge, hasUnsafeChars, MAX_LINE} from './agent/bridge.js';
 import {createRegistry} from './commands.js';
 import {buildCatalog} from './hints/catalog.js';
 import {completionLines} from './hints/catalog-lines.js';
+import {walkPath} from './hints/path.js';
 import {sanitizeBlock} from './hints/sanitize.js';
 import {unknownCommandLines} from './hints/typo.js';
 import {parseLine} from './parse-line.js';
@@ -55,12 +56,13 @@ const headless: HeadlessMain = async (yena, request) => {
 	};
 
 	const catalogCommand = catalog().byName.get(parsed.name);
+	const subPath = catalogCommand ? walkPath(catalogCommand, parsed.args).path.map(s => s.name).join(' ') : '';
 	const started = Date.now();
 	const done = (status: 'ok' | 'error') => {
 		try {
 			yena.log.info('headless command', {
 				command: catalogCommand?.name ?? 'unknown',
-				...(parsed.args[0] !== undefined && catalogCommand?.subs.some(s => s.name === parsed.args[0] || s.aliases.includes(parsed.args[0]!)) && {subcommand: parsed.args[0]}),
+				...(subPath !== '' && {subcommand: subPath}),
 				status,
 				ms: Date.now() - started,
 			});

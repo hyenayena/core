@@ -33,3 +33,17 @@ test('command and subcommand counts are capped and bad subcommand names are skip
 	assert.ok(firstSubs.every(l => /^first [A-Za-z0-9._-]+\t/.test(l)));
 	assert.ok(lines.every(l => l.split('\t').length === 2));
 });
+
+test('neither the builtin help nor any doc field reaches the lines', () => {
+	const documented = {
+		name: 'doc',
+		description: 'Doc',
+		usage: 'doc <x>',
+		args: [{name: 'x', description: 'ARGDOC'}],
+		options: [{name: '--o', description: 'OPTDOC'}],
+		notes: ['NOTE'],
+		subcommands: [{name: 'go', description: 'Go', usage: 'doc go', notes: ['SUBNOTE'], subcommands: [{name: 'deep', description: 'Deep'}]}],
+		run() {},
+	} as unknown as Command;
+	assert.deepEqual(completionLines(buildCatalog([documented])), ['doc\tDoc', 'doc go\tGo']);
+});

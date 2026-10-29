@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {computeHints} from '../../src/hints/model.js';
-import {currentPlaceholder, parseUsage} from '../../src/hints/usage.js';
+import {argState, currentPlaceholder, optionNames, parseUsage, slotFlags, slotKey, splitUsage} from '../../src/hints/usage.js';
 import {catalog} from './fixture.js';
 
 test('parseUsage drops the path and classifies tokens', () => {
@@ -59,7 +59,7 @@ test('a usage that does not start with the command path is shown plain', () => {
 	const odd = {
 		commands: [],
 		byName: new Map([
-			['x', {name: 'x', description: '', usage: 'something else <a>', agent: 'confirm' as const, subs: [], index: 0}],
+			['x', {name: 'x', description: '', usage: 'something else <a>', agent: 'confirm' as const, subs: [], args: [], options: [], notes: [], index: 0}],
 		]),
 	};
 	const h = computeHints(odd, 'x ');
@@ -71,4 +71,72 @@ test('a usage that does not start with the command path is shown plain', () => {
 test('a missing usage is synthesised from the path', () => {
 	const h = computeHints(catalog, 'claude auth ');
 	assert.equal(h.usage!.head, 'claude auth');
+});
+
+test('splitUsage keeps bracketed groups together', () => {
+	assert.deepEqual(splitUsage('x [--name <n>] [repo dir] [--file <path> | --data <text…>] <a b>…'), [
+		'x',
+		'[--name <n>]',
+		'[repo dir]',
+		'[--file <path> | --data <text…>]',
+		'<a b>…',
+	]);
+	assert.deepEqual(splitUsage('x <unclosed a b'), ['x', '<unclosed a b']);
+	assert.deepEqual(splitUsage('x ] y'), ['x', ']', 'y']);
+	assert.deepEqual(splitUsage(5 as never), []);
+});
+
+test('parseUsage classifies bracketed groups as one token', () => {
+	const t = parseUsage('x [--name <n>] [repo dir] <text…>', 1);
+	assert.deepEqual(t.map(x => [x.text, x.kind, x.variadic]), [
+		['[--name <n>]', 'flag', false],
+		['[repo dir]', 'slot', false],
+		['<text…>', 'slot', true],
+	]);
+});
+
+test('optionNames lists names and whether each takes a value', () => {
+	assert.deepEqual(optionNames('[--name <n>]'), [{name: '--name', takesValue: true}]);
+	assert.deepEqual(optionNames('[--new]'), [{name: '--new', takesValue: false}]);
+	assert.deepEqual(optionNames('[--file <path> | --data <text…>]'), [
+		{name: '--file', takesValue: true},
+		{name: '--data', takesValue: true},
+	]);
+	assert.deepEqual(optionNames('[-H name:value]…'), [{name: '-H', takesValue: true}]);
+	assert.deepEqual(optionNames('[--json|-j]'), [
+		{name: '--json', takesValue: false},
+		{name: '-j', takesValue: false},
+	]);
+	assert.deepEqual(optionNames('[--model=<m>]'), [{name: '--model', takesValue: true}]);
+	assert.deepEqual(optionNames('[--<field> <value>]'), [{name: '--<field>', takesValue: true}]);
+	assert.deepEqual(optionNames('[--a] [--b x]'), [
+		{name: '--a', takesValue: false},
+		{name: '--b', takesValue: true},
+	]);
+	assert.deepEqual(optionNames(7 as never), []);
+});
+
+test('slotKey and slotFlags normalise a slot', () => {
+	assert.equal(slotKey('<project>…'), 'project');
+	assert.equal(slotKey('[model]'), 'model');
+	assert.equal(slotKey('[source]...'), 'source');
+	assert.equal(slotKey('[subcommand…]'), 'subcommand');
+	assert.equal(slotKey('[<name>]'), 'name');
+	assert.equal(slotKey('plain'), 'plain');
+	assert.deepEqual(slotFlags('[subcommand…]'), {optional: true, repeatable: true});
+	assert.deepEqual(slotFlags('<project>'), {optional: false, repeatable: false});
+});
+
+test('option values are skipped when counting arguments', () => {
+	const t = parseUsage('x [--name <n>] [--new] <a> <b>', 1);
+	assert.equal(currentPlaceholder(t, ['--name', 'v'], true), 2);
+	assert.equal(currentPlaceholder(t, ['--new', 'one'], true), 3);
+	assert.deepEqual(argState(t, ['--name'], true), {active: -1, option: '--name'});
+	assert.deepEqual(argState(t, ['--name', 'va'], false), {active: -1, option: '--name'});
+	assert.equal(currentPlaceholder(t, ['--name=v', 'one'], true), 3);
+	assert.equal(currentPlaceholder(t, ['--new', 'one'], true, n => (n === '--new' ? true : undefined)), 2);
+	assert.equal(currentPlaceholder(t, ['--name', 'one'], true, n => (n === '--name' ? false : undefined)), 3);
+	assert.equal(currentPlaceholder(t, ['-x', 'one'], true, () => {
+		throw new Error('bad');
+	}), 3);
 });

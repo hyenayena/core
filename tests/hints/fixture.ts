@@ -34,6 +34,38 @@ export const catalog = buildCatalog([
 			},
 		],
 	},
+	{
+		name: 'doc',
+		description: 'Documented',
+		usage: 'doc <subcommand>',
+		args: [{name: 'subcommand', description: 'What to run'}],
+		subcommands: [
+			{
+				name: 'ask',
+				usage: 'doc ask [--new] [--model <m>] <text…>',
+				description: 'Ask',
+				agent: 'safe',
+				args: [{name: 'text', description: 'What to ask'}],
+				options: [
+					{name: '--new', description: 'Start a new chat'},
+					{name: '--model', aliases: ['-m'], value: '<m>', description: 'Model to use'},
+				],
+				notes: ['The answer streams into the chat'],
+			},
+			{
+				name: 'auth',
+				usage: 'doc auth <login|logout>',
+				description: 'Authentication',
+				agent: 'confirm',
+				args: [{name: 'login|logout', description: 'Subcommand'}],
+				subcommands: [
+					{name: 'login', usage: 'doc auth login [account]', description: 'Log in', agent: 'safe', args: [{name: 'account', description: 'Account name'}]},
+					{name: 'logout', usage: 'doc auth logout', description: 'Log out', agent: 'deny'},
+					{name: 'status', usage: 'doc auth status', description: 'Show the login'},
+				],
+			},
+		],
+	},
 ]);
 
 export const env = (history: string[] = []): StepEnv => ({

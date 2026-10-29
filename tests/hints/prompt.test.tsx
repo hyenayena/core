@@ -173,7 +173,7 @@ test('help and help <command> list sanitised data', async () => {
 	await submit(h, 'help');
 	assert.match(h.lastFrame(), /^ {2}mod\s+Manage modules/m);
 	await submit(h, 'help mod');
-	assert.match(h.lastFrame(), /^mod$/m);
+	assert.match(h.lastFrame(), /^Usage: mod$/m);
 	h.unmount();
 });
 
@@ -223,7 +223,7 @@ test('a long line keeps the prompt on one row with the cursor visible', async ()
 	assert.equal(lines.filter(l => l.startsWith('> ')).length, 1);
 	assert.ok(lines[0]!.startsWith('> …'));
 	assert.ok(lines[0]!.length <= 29);
-	assert.equal(lines.length, 1);
+	assert.ok(lines.slice(1).every(l => !l.startsWith('> ') && l.length <= 29));
 	h.unmount();
 });
 

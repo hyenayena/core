@@ -7,7 +7,8 @@ export {windowLine, indexAtCell, type Windowed} from '../hints/viewport.js';
 export {windowStart} from './window.js';
 export {inputRowCount, inputWindow, offsetAtCell, type InputWindowRow} from './input-window.js';
 export {hangingRows} from './hanging.js';
-export {COMMAND_TOOLS, formatCommandList, formatRunResult, type CommandToolSpec} from './agent.js';
+export {COMMAND_TOOLS, formatCommandList, formatRunResult, resolveCommandLine, type CommandToolSpec, type ResolvedCommandLine} from './agent.js';
+export {checkCommandDocs} from '../hints/docs-lint.js';
 export type {Tone, FrameRow, PickerItem} from './types.js';
 export {
 	BRAILLE_FILL,

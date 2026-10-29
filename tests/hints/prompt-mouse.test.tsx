@@ -68,7 +68,7 @@ test('a click on a hint row accepts it and never runs the line', async () => {
 	const p = t.promptRow();
 	const above = () => t.lines().slice(0, t.promptRow().y).filter(l => l.trim() !== '');
 	const before = above();
-	const y = hintRow(t.lines(), p, 'echo');
+	const y = hintRow(t.lines(), p, 'echo +Print');
 	assert.ok(y > p.y, 'echo hint row is shown');
 	await t.click(p.x + 3, y);
 	assert.deepEqual(above(), before, 'nothing was printed');
@@ -153,7 +153,7 @@ test('the same in the side panel, where offsets include the border and padding',
 	await t.type('ec');
 	const p = t.promptRow(40);
 	assert.ok(p.x > 40, 'prompt is in the panel');
-	const y = hintRow(t.lines(), p, 'echo');
+	const y = hintRow(t.lines(), p, 'echo +Print');
 	assert.ok(y > p.y, 'echo hint row is shown in the panel');
 	await t.click(p.x + 3, y);
 	assert.equal(t.promptRow(40).text.slice(p.x).trimEnd(), '> echo');

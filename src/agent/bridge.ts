@@ -4,6 +4,7 @@ import type {
 	CommandBridge,
 	CommandContext,
 	CommandInfo,
+	CommandInfoSub,
 	CommandRunRequest,
 	CommandRunResult,
 	CommandRunStatus,
@@ -12,6 +13,7 @@ import type {
 	UiElement,
 } from '../../../../src/api.js';
 import type {Catalog, CatalogCommand, CatalogSub} from '../hints/catalog.js';
+import {policyOf, walkPath} from '../hints/path.js';
 import {sanitizeBlock, sanitizeText, sanitizeToken} from '../hints/sanitize.js';
 import {unknownCommandLines} from '../hints/typo.js';
 import {c} from '../hints/style.js';
@@ -55,17 +57,12 @@ export type BridgeDeps = {
 
 type Resolved = {policy: AgentPolicy; subcommand?: string};
 
-function resolvePolicy(cmd: CatalogCommand | undefined, firstArg: string | undefined): Resolved {
+function resolvePolicy(cmd: CatalogCommand | undefined, args: readonly string[]): Resolved {
 	if (!cmd) return {policy: 'confirm'};
-	if (firstArg !== undefined) {
-		const sub = findSub(cmd.subs, firstArg);
-		if (sub) return {policy: sub.agent ?? cmd.agent, subcommand: sub.name};
-	}
-	return {policy: cmd.agent};
-}
-
-function findSub(subs: CatalogSub[], token: string): CatalogSub | undefined {
-	return subs.find(s => s.name === token) ?? subs.find(s => s.aliases.includes(token));
+	const {path} = walkPath(cmd, args);
+	const resolved: Resolved = {policy: policyOf(cmd, path)};
+	if (path.length > 0) resolved.subcommand = path.map(s => s.name).join(' ');
+	return resolved;
 }
 
 // `ask` can only tighten what a command declares.
@@ -82,17 +79,24 @@ export function createCommandBridge(deps: BridgeDeps): CommandBridge {
 		const mode = deps.mode();
 		if (mode === 'off') return [];
 		return deps.catalog().commands.map(cmd => {
+			const subsOf = (subs: readonly CatalogSub[], inherited: AgentPolicy): CommandInfoSub[] =>
+				subs.map(s => {
+					const own = s.agent ?? inherited;
+					const sub: CommandInfoSub = {
+						name: s.name,
+						aliases: [...s.aliases],
+						usage: s.usage,
+						description: s.description,
+						policy: effective(own, mode),
+					};
+					if (s.subs.length > 0) sub.subcommands = subsOf(s.subs, own);
+					return sub;
+				});
 			const info: CommandInfo = {
 				name: cmd.name,
 				description: cmd.description,
 				policy: effective(cmd.agent, mode),
-				subcommands: cmd.subs.map(s => ({
-					name: s.name,
-					aliases: [...s.aliases],
-					usage: s.usage,
-					description: s.description,
-					policy: effective(s.agent ?? cmd.agent, mode),
-				})),
+				subcommands: subsOf(cmd.subs, cmd.agent),
 			};
 			if (cmd.usage !== undefined) info.usage = cmd.usage;
 			return info;
@@ -172,7 +176,7 @@ export function createCommandBridge(deps: BridgeDeps): CommandBridge {
 			}
 			const catalogCommand = catalog.byName.get(parsed.name);
 			if (catalogCommand) meta.command = catalogCommand.name;
-			const resolved = resolvePolicy(catalogCommand, parsed.args[0]);
+			const resolved = resolvePolicy(catalogCommand, parsed.args);
 			if (resolved.subcommand !== undefined) meta.subcommand = resolved.subcommand;
 			const policy = effective(resolved.policy, mode);
 			meta.policy = policy;

@@ -108,3 +108,50 @@ test('src/headless.ts has no react or ink in its import graph', () => {
 	walk(resolve(dirname(fileURLToPath(import.meta.url)), '../src/headless.ts'));
 	assert.ok(seen.size >= 8);
 });
+
+const tree = (seen: {args?: string[]; ctx?: CommandContext}): Command => ({
+	name: 'tree',
+	description: 'Tree',
+	usage: 'tree <subcommand>',
+	subcommands: [{name: 'leaf', usage: 'tree leaf <x>', description: 'Leaf', args: [{name: 'x', description: 'The x'}]}],
+	run: (args, ctx) => {
+		seen.args = args;
+		seen.ctx = ctx;
+		if (args.length === 0) ctx.showHelp!();
+		if (args[0] === 'leafhelp') ctx.showHelp!(['leaf']);
+		if (args[0] === 'badhelp') ctx.showHelp!(['nope']);
+	},
+});
+
+test('<cmd> help prints core help and exits 0 without running the command', async () => {
+	const seen: {args?: string[]} = {};
+	const {out, error} = await capture(() => headless(yenaWith([tree(seen)]), {args: ['tree', 'help']}));
+	assert.equal(error, undefined);
+	assert.equal(seen.args, undefined);
+	assert.match(out, /^Usage: tree <subcommand>$/m);
+	assert.match(out, /^ {2}leaf +<x> +Leaf$/m);
+	const leaf = await capture(() => headless(yenaWith([tree(seen)]), {args: ['tree', 'help', 'leaf']}));
+	assert.match(leaf.out, /^ {2}<x> +The x$/m);
+	const bad = await capture(() => headless(yenaWith([tree(seen)]), {args: ['tree', 'help', 'lef']}));
+	assert.equal(bad.error?.message, 'Unknown subcommand: lef (tree). Did you mean: leaf?');
+	assert.equal(seen.args, undefined);
+});
+
+test('commands get showHelp for themselves and their subcommands', async () => {
+	const seen: {args?: string[]; ctx?: CommandContext} = {};
+	const {out} = await capture(() => headless(yenaWith([tree(seen)]), {args: ['tree']}));
+	assert.deepEqual(seen.args, []);
+	assert.equal(seen.ctx?.headless, true);
+	assert.match(out, /^Usage: tree <subcommand>$/m);
+	const leaf = await capture(() => headless(yenaWith([tree(seen)]), {args: ['tree', 'leafhelp']}));
+	assert.match(leaf.out, /^Usage: tree leaf <x>$/m);
+	const bad = await capture(() => headless(yenaWith([tree(seen)]), {args: ['tree', 'badhelp']}));
+	assert.match(bad.error?.message ?? '', /^Unknown subcommand: nope \(tree\)/);
+});
+
+test('help <command> <subcommand> describes the subcommand; an unknown path fails', async () => {
+	const {out} = await capture(() => headless(yenaWith([tree({})]), {args: ['help', 'tree', 'leaf']}));
+	assert.match(out, /^Usage: tree leaf <x>$/m);
+	const {error} = await capture(() => headless(yenaWith([tree({})]), {args: ['help', 'tre']}));
+	assert.equal(error?.message, 'Unknown command: tre. Did you mean: tree?');
+});

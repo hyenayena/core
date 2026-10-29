@@ -32,13 +32,18 @@ function distance(a: string[], b: string[]): number {
 
 /** The single best command name for a mistyped token, if any is close enough. */
 export function nearest(catalog: Catalog, typed: string): string | undefined {
+	return nearestName(catalog.commands.map(c => c.name), typed);
+}
+
+/** The single best of `names` for a mistyped token, if any is close enough. */
+export function nearestName(names: readonly string[], typed: string): string | undefined {
 	try {
 		const t = codePoints(typed);
 		if (t.length === 0) return undefined;
 		const limit = t.length <= 4 ? 1 : 2;
 		let best: {name: string; dist: number; prefix: boolean} | undefined;
-		for (const cmd of catalog.commands) {
-			const n = codePoints(cmd.name);
+		for (const name of names) {
+			const n = codePoints(name);
 			const dist = distance(t, n);
 			const prefix = t.length >= 2 && t.length <= n.length && t.every((ch, i) => n[i] === ch);
 			if (dist > limit && !prefix) continue;
@@ -47,7 +52,7 @@ export function nearest(catalog: Catalog, typed: string): string | undefined {
 				dist < best.dist ||
 				(dist === best.dist && prefix && !best.prefix)
 			) {
-				best = {name: cmd.name, dist, prefix};
+				best = {name, dist, prefix};
 			}
 		}
 		return best?.name;

@@ -102,32 +102,32 @@ test('Tab then Tab cycles through the frozen list and wraps', () => {
 	const r1 = run([...typed('mod '), tab]);
 	assert.equal(r1.state.value, 'mod install ');
 	assert.ok(r1.state.cycle);
-	const names = ['install', 'update', 'remove', 'list'];
+	const names = ['install', 'update', 'remove', 'list', 'help'];
 	let s = r1.state;
-	for (let i = 1; i <= 5; i++) {
+	for (let i = 1; i <= 6; i++) {
 		s = step(s, tab, r1.env).state;
-		assert.equal(s.value, `mod ${names[i % 4]} `);
+		assert.equal(s.value, `mod ${names[i % 5]} `);
 		assert.equal(s.cursor, s.value.length);
 	}
 	const back = step(s, shiftTab, r1.env).state;
 	assert.equal(back.value, 'mod install ');
 	const wrap = step(back, shiftTab, r1.env).state;
-	assert.equal(wrap.value, 'mod list ');
+	assert.equal(wrap.value, 'mod help ');
 });
 
 test('cycling keeps showing the frozen list with the current selection', () => {
 	const r = run([...typed('mod '), tab, tab]);
 	const v = visibleHints(r.state, r.env)!;
-	assert.equal(v.items.length, 4);
+	assert.equal(v.items.length, 5);
 	assert.equal(r.state.sel, 1);
 	assert.equal(ghostText(r.state, r.env), '');
 });
 
 test('Shift+Tab accepts the last item then cycles', () => {
 	const r = run([...typed('mod '), shiftTab]);
-	assert.equal(r.state.value, 'mod list ');
+	assert.equal(r.state.value, 'mod help ');
 	const r2 = step(r.state, shiftTab, r.env);
-	assert.equal(r2.state.value, 'mod remove ');
+	assert.equal(r2.state.value, 'mod list ');
 });
 
 test('Esc during cycling restores the original and dismisses', () => {
@@ -161,8 +161,8 @@ test('Up/Down preview without changing the value, wrapping', () => {
 	assert.equal(d.sel, 1);
 	assert.equal(d.navigated, true);
 	const u = step(base.state, up, base.env).state;
-	assert.equal(u.sel, 3);
-	const w = run([...typed('mod '), down, down, down, down]).state;
+	assert.equal(u.sel, 4);
+	const w = run([...typed('mod '), down, down, down, down, down]).state;
 	assert.equal(w.sel, 0);
 });
 

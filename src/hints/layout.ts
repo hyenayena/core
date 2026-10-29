@@ -12,7 +12,7 @@ export type Segment = {
 };
 
 export type HintRow = {
-	kind: 'item' | 'usage' | 'footer';
+	kind: 'item' | 'usage' | 'doc' | 'footer';
 	selected?: boolean;
 	// Index in `h.items`, set on item rows
 	item?: number;
@@ -135,6 +135,11 @@ function usageRow(usage: UsageLine, columns: number): HintRow {
 	return {kind: 'usage', segments: clip(segments, columns - 1)};
 }
 
+function docRow(doc: {label: string; description: string}, columns: number): HintRow {
+	const segments: Segment[] = [{text: BLANK_MARKER}, {text: doc.label, bold: true}, {text: '  '}, {text: doc.description, dim: true}];
+	return {kind: 'doc', segments: clip(segments, columns - 1)};
+}
+
 /** Rows for the hint list under the prompt; recomputed from `size` on every call, never throws. */
 export function layoutHints(
 	h: HintResult,
@@ -157,11 +162,12 @@ function layout(h: HintResult, ui: HintUi, size: {columns: number; rows: number}
 	const color = ui.color ?? colorEnabled();
 	const items = Array.isArray(h.items) ? h.items : [];
 	const sel = items.length === 0 ? 0 : Math.min(Math.max(0, Math.floor(ui.sel) || 0), items.length - 1);
-	const usage = (h.stage === 'command' ? items[sel]?.usage : undefined) ?? h.usage;
+	const usage = (h.stage === 'command' || h.stage === 'sub' ? items[sel]?.usage : undefined) ?? h.usage;
 
 	const out: HintRow[] = [];
 	const wantUsage = usage !== undefined && (total >= 3 || items.length === 0);
 	if (wantUsage && usage) out.push(usageRow(usage, columns));
+	if (wantUsage && usage?.doc && items.length === 0 && total >= 2) out.push(docRow(usage.doc, columns));
 	const r = total - out.length;
 	if (items.length === 0 || r < 1) return out;
 

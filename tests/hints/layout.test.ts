@@ -190,3 +190,24 @@ test('the item index follows the +N more window', () => {
 test('a single available row carries the selected index', () => {
 	assert.deepEqual(items(layoutHints(many(5), {sel: 3}, {columns: 80, rows: 3})), [3]);
 });
+
+test('the sub stage shows the selected subcommand usage', () => {
+	const h = computeHints(catalog, 'doc ');
+	const rows = layoutHints(h, {sel: 0}, {columns: 80, rows: 24});
+	assert.equal(rows[0]!.kind, 'usage');
+	assert.match(text(rows[0]!), /doc ask \[--new\]/);
+	const second = layoutHints(h, {sel: 1}, {columns: 80, rows: 24});
+	assert.match(text(second[0]!), /doc auth <login\|logout>/);
+});
+
+test('a doc row follows the usage when there are no items', () => {
+	const h = computeHints(catalog, 'doc ask ');
+	const rows = layoutHints(h, {sel: 0}, {columns: 80, rows: 24});
+	assert.deepEqual(kinds(rows), ['usage', 'doc']);
+	assert.equal(text(rows[1]!), '  <text>…  What to ask');
+	assert.deepEqual(rows[1]!.segments.map(s => [s.bold === true, s.dim === true]), [[false, false], [true, false], [false, false], [false, true]]);
+	assert.deepEqual(kinds(layoutHints(h, {sel: 0}, {columns: 80, rows: 3})), ['usage']);
+	const narrow = layoutHints(h, {sel: 0}, {columns: 14, rows: 24});
+	for (const r of narrow) assert.ok(stringCells(text(r)) <= 13);
+	assert.deepEqual(kinds(layoutHints(computeHints(catalog, 'doc ask -'), {sel: 0}, {columns: 80, rows: 24})), ['usage', 'item', 'item']);
+});

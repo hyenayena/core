@@ -1,7 +1,8 @@
-import type {Catalog, CatalogCommand, CatalogSub} from './catalog.js';
+import type {Catalog, CatalogCommand, CatalogOption, CatalogSub} from './catalog.js';
+import {argLabel, optionLabel} from './help.js';
 import {rank} from './match.js';
 import {graphemes} from './width.js';
-import {currentPlaceholder, parseUsage, type UsageToken} from './usage.js';
+import {argState, parseUsage, slotKey, splitUsage, type UsageToken} from './usage.js';
 
 export type UsageLine = {
 	// Text shown plain before the tokens (the command path, or the whole usage when it could not be parsed)
@@ -9,6 +10,8 @@ export type UsageLine = {
 	tokens: UsageToken[];
 	// Index into `tokens` of the argument slot to emphasise, or -1
 	active: number;
+	// The documented argument under the cursor, or the option whose value is being typed
+	doc?: {label: string; description: string};
 };
 
 export type HintItem = {
@@ -65,22 +68,51 @@ export function isPrefixCI(token: string, insert: string): boolean {
 	return true;
 }
 
+type Node = CatalogCommand | CatalogSub;
+
+// A pattern option (`--<field>`) stands for any name with its prefix that no other option claims.
+const matchesPattern = (o: CatalogOption, name: string): boolean => {
+	const at = o.name.indexOf('<');
+	return at > 0 && name.length > at && name.startsWith(o.name.slice(0, at));
+};
+
+const findOption = (options: readonly CatalogOption[], name: string) =>
+	options.find(o => o.name === name) ?? options.find(o => o.aliases.includes(name)) ?? options.find(o => matchesPattern(o, name));
+
 function buildUsage(
-	usage: string | undefined,
+	node: Node,
 	path: string[],
 	typedPath: string[],
 	typedArgs: string[] | undefined,
 	endsWithSpace: boolean,
+	pending?: {option?: string},
 ): UsageLine | undefined {
+	const usage = node.usage;
 	// A synthesised name adds nothing to the command shown next to it
 	if (!usage || usage.trim() === '') return undefined;
 	const text = usage.trim();
-	const words = text.split(/\s+/).filter(Boolean);
+	const words = splitUsage(text);
 	const matches = (p: string[]) => p.length > 0 && p.every((w, i) => words[i] === w);
 	if (!matches(path) && !matches(typedPath)) return {head: text, tokens: [], active: -1};
 	const tokens = parseUsage(text, path.length);
-	const active = typedArgs ? currentPlaceholder(tokens, typedArgs, endsWithSpace) : -1;
-	return {head: words.slice(0, path.length).join(' '), tokens, active};
+	const line: UsageLine = {head: words.slice(0, path.length).join(' '), tokens, active: -1};
+	if (!typedArgs) return line;
+	const state = argState(tokens, typedArgs, endsWithSpace, name => {
+		const o = findOption(node.options, name);
+		return o ? o.value !== undefined : undefined;
+	});
+	line.active = state.active;
+	if (pending && state.option !== undefined) pending.option = state.option;
+	const typingOption = !endsWithSpace && (typedArgs[typedArgs.length - 1] ?? '').startsWith('-');
+	if (state.option !== undefined) {
+		const o = findOption(node.options, state.option);
+		if (o && o.description !== '') line.doc = {label: optionLabel(o), description: o.description};
+	} else if (state.active >= 0 && !typingOption) {
+		const key = slotKey(tokens[state.active]!.text);
+		const a = node.args.find(x => x.name === key);
+		if (a && a.description !== '') line.doc = {label: argLabel(a), description: a.description};
+	}
+	return line;
 }
 
 function optionalUsage(u: UsageLine | undefined): {usage?: UsageLine} {
@@ -131,7 +163,7 @@ function analyse(catalog: Catalog, line: string): HintResult {
 			cur.text,
 			catalog.commands,
 			c => [c.name],
-			c => buildUsage(c.usage, [c.name], [c.name], undefined, false),
+			c => buildUsage(c, [c.name], [c.name], undefined, false),
 		);
 		const result: HintResult = {stage: 'command', tokenStart: cur.start, token: cur.text, items};
 		if (items.length === 0) result.unknown = true;
@@ -143,7 +175,7 @@ function analyse(catalog: Catalog, line: string): HintResult {
 
 	const path = [command.name];
 	const typedPath = [command.name];
-	let usage = command.usage;
+	let node: Node = command;
 	let subs: CatalogSub[] = command.subs;
 	let consumed = 1;
 	for (; consumed < complete.length; consumed++) {
@@ -152,19 +184,19 @@ function analyse(catalog: Catalog, line: string): HintResult {
 		if (!sub) break;
 		path.push(sub.name);
 		typedPath.push(word);
-		usage = sub.usage;
+		node = sub;
 		subs = sub.subs;
 	}
 	const argsConsumed = consumed < complete.length;
-	const nodeUsage = (typed: string[] | undefined) =>
-		buildUsage(usage, path, typedPath, typed, endsWithSpace);
+	const nodeUsage = (typed: string[] | undefined, pending?: {option?: string}) =>
+		buildUsage(node, path, typedPath, typed, endsWithSpace, pending);
 
 	if (!argsConsumed && subs.length > 0) {
 		const items = itemsFor<CatalogSub>(
 			cur.text,
 			subs,
 			s => (cur.text === '' ? [s.name] : [s.name, ...s.aliases]),
-			() => undefined,
+			s => buildUsage(s, [...path, s.name], [...typedPath, s.name], undefined, false),
 		);
 		if (items.length > 0 || cur.text === '') {
 			return {
@@ -178,12 +210,24 @@ function analyse(catalog: Catalog, line: string): HintResult {
 	}
 
 	const typedArgs = [...complete.slice(consumed).map(t => t.text), ...(endsWithSpace ? [] : [cur.text])];
+	const pending: {option?: string} = {};
+	const usageLine = nodeUsage(typedArgs, pending);
+	// Option names only: a value is never suggested.
+	const items =
+		cur.text.startsWith('-') && pending.option === undefined
+			? itemsFor<CatalogOption>(
+					cur.text,
+					node.options,
+					o => (/^-*$/.test(cur.text) ? [o.name] : [o.name, ...o.aliases]).filter(n => !n.includes('<')),
+					() => undefined,
+				)
+			: [];
 	return {
 		stage: 'arg',
 		tokenStart: cur.start,
 		token: cur.text,
-		items: [],
-		...optionalUsage(nodeUsage(typedArgs)),
+		items,
+		...optionalUsage(usageLine),
 	};
 }
 

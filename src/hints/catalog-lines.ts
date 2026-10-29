@@ -19,7 +19,7 @@ export function completionLines(catalog: Catalog): string[] {
 		let subs = 0;
 		for (const sub of cmd.subs) {
 			if (subs >= MAX_SUBS) break;
-			if (!NAME.test(sub.name)) continue;
+			if (sub.builtin || !NAME.test(sub.name)) continue;
 			subs++;
 			lines.push(`${cmd.name} ${sub.name}\t${describe(sub.description)}`);
 		}

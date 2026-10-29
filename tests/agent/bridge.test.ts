@@ -3,6 +3,7 @@ import {test} from 'node:test';
 import type {Command, CommandRunResult} from '../../../../src/api.js';
 import {createCommandBridge, type AgentViewHandle, type BridgeDeps, MAX_OUTPUT_CHARS, MAX_OUTPUT_LINES} from '../../src/agent/bridge.js';
 import {buildCatalog} from '../../src/hints/catalog.js';
+import {createRegistry} from '../../src/commands.js';
 import type {AgentMode} from '../../src/view/prefs.js';
 import {fakeLogger} from '../testkit.js';
 
@@ -257,7 +258,10 @@ test('list reflects commands added later and carries effective policies', async 
 			description: 'a',
 			usage: 'a <x>',
 			policy: 'safe',
-			subcommands: [{name: 's', aliases: ['t'], usage: 'a s', description: 'sd', policy: 'deny'}],
+			subcommands: [
+				{name: 's', aliases: ['t'], usage: 'a s', description: 'sd', policy: 'deny'},
+				{name: 'help', aliases: [], usage: 'a help [subcommand…]', description: 'Show usage, arguments and subcommands', policy: 'safe'},
+			],
 		},
 	]);
 	s.commands.push(say('late', undefined));
@@ -491,4 +495,79 @@ test('beforeRun and endRun wrap only runs that reached execution, and a throwing
 	assert.deepEqual(calls, []);
 	assert.equal((await run(s, 'a')).status, 'ok');
 	assert.deepEqual(calls, ['before', 'end']);
+});
+
+const nestedTree = (log: string[]): Command => ({
+	name: 'n',
+	description: 'n',
+	agent: 'safe',
+	subcommands: [
+		{name: 'locked', usage: 'n locked', description: 'l', agent: 'confirm', subcommands: [{name: 'open', usage: 'n locked open', description: 'o', agent: 'safe'}, {name: 'plain', usage: 'n locked plain', description: 'p'}]},
+		{name: 'zone', usage: 'n zone', description: 'z', subcommands: [{name: 'off', aliases: ['x'], usage: 'n zone off', description: 'f', agent: 'deny'}]},
+		{name: 'own', usage: 'n own', description: 'w', subcommands: [{name: 'help', usage: 'n own help', description: 'h', agent: 'confirm'}, {name: 'q', usage: 'n own q', description: 'q'}]},
+	],
+	run: (args, ctx) => {
+		log.push(args.join(' '));
+		ctx.print(`ran ${args.join(' ')}`);
+	},
+});
+
+function registrySetup(mode: AgentMode = 'policy') {
+	const log: string[] = [];
+	const registry = createRegistry([nestedTree(log)]);
+	const state = {mode};
+	const bridge = createCommandBridge({
+		find: name => registry.find(name),
+		catalog: () => buildCatalog(registry.commands),
+		mode: () => state.mode,
+		tee: () => {},
+		clear: () => {},
+		exit: () => {},
+		log: fakeLogger().log,
+	});
+	return {bridge, log, state};
+}
+
+test('nested policies: deepest declared wins, undeclared inherits, ask only tightens', async () => {
+	const s = registrySetup();
+	const seen: unknown[] = [];
+	const confirm = async (req: unknown) => (seen.push(req), false);
+	assert.equal((await s.bridge.run({line: 'n zone x', caller: 't'})).status, 'denied');
+	assert.equal((await s.bridge.run({line: 'n zone', caller: 't'})).status, 'ok');
+	assert.equal((await s.bridge.run({line: 'n locked open', caller: 't'})).status, 'ok');
+	assert.equal((await s.bridge.run({line: 'n locked plain a', caller: 't', confirm})).status, 'declined');
+	assert.deepEqual(seen, [{line: 'n locked plain a', command: 'n', subcommand: 'locked plain', caller: 't'}]);
+	s.state.mode = 'ask';
+	assert.equal((await s.bridge.run({line: 'n locked open', caller: 't', confirm})).status, 'declined');
+	assert.equal((await s.bridge.run({line: 'n zone off', caller: 't', confirm})).status, 'denied');
+	assert.deepEqual(s.log, ['zone', 'locked open']);
+});
+
+test('the builtin help is safe and printed by core; a declared help keeps its policy and runs the command', async () => {
+	const s = registrySetup();
+	const help = await s.bridge.run({line: 'n locked help', caller: 't'});
+	assert.equal(help.status, 'ok');
+	assert.match(help.output, /^Usage: n locked$/m);
+	assert.match(help.output, /^ {2}open +o$/m);
+	const sub = await s.bridge.run({line: 'n help zone off', caller: 't'});
+	assert.match(sub.output, /^Usage: n zone off$/m);
+	const bad = await s.bridge.run({line: 'n help nope', caller: 't'});
+	assert.equal(bad.status, 'error');
+	assert.match(bad.reason ?? '', /^Unknown subcommand: nope \(n\)/);
+	assert.equal((await s.bridge.run({line: 'n own help', caller: 't'})).status, 'declined');
+	assert.equal((await s.bridge.run({line: 'n own help', caller: 't', confirm: yes})).output, 'ran own help');
+	assert.deepEqual(s.log, ['own help']);
+});
+
+test('list nests subcommands with their effective policies', () => {
+	const s = registrySetup('ask');
+	const n = s.bridge.list().find(c => c.name === 'n');
+	const locked = n!.subcommands.find(x => x.name === 'locked')!;
+	assert.deepEqual(locked.subcommands?.map(x => [x.name, x.policy]), [['open', 'confirm'], ['plain', 'confirm'], ['help', 'confirm']]);
+	s.state.mode = 'policy';
+	const p = s.bridge.list().find(c => c.name === 'n');
+	assert.deepEqual(p!.subcommands.find(x => x.name === 'zone')!.subcommands?.map(x => [x.name, x.aliases, x.policy]), [['off', ['x'], 'deny'], ['help', [], 'safe']]);
+	assert.deepEqual(p!.subcommands.find(x => x.name === 'locked')!.subcommands?.map(x => x.policy), ['safe', 'confirm', 'safe']);
+	assert.equal(p!.subcommands.find(x => x.name === 'own')!.subcommands?.[0]?.policy, 'confirm');
+	assert.equal(p!.subcommands.find(x => x.name === 'help')?.policy, 'safe');
 });

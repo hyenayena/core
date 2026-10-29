@@ -572,7 +572,10 @@ test('a view can run a console line: it opens the console and runs it there; unk
 		name: 'say',
 		description: 'say it',
 		usage: 'say <text>',
-		subcommands: [{name: 'loud', description: 'shout', usage: 'say loud <text>', aliases: ['l']}],
+		subcommands: [
+			{name: 'loud', description: 'shout', usage: 'say loud <text>', aliases: ['l']},
+			{name: 'help', description: 'Show usage, arguments and subcommands', usage: 'say help [subcommand…]'},
+		],
 	});
 	assert.equal(host.runLine('nope x'), false);
 	assert.equal(host.runLine('say\u0007 x'), false);

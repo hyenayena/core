@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {acceptEdit, computeHints} from '../../src/hints/model.js';
+import {buildCatalog} from '../../src/hints/catalog.js';
 import {catalog} from './fixture.js';
 
 const labels = (line: string) => computeHints(catalog, line).items.map(i => i.label);
@@ -46,7 +47,7 @@ test('subcommand stage after a command and a space', () => {
 	assert.equal(h.stage, 'sub');
 	assert.equal(h.token, '');
 	assert.equal(h.tokenStart, 4);
-	assert.deepEqual(labels('mod '), ['install', 'update', 'remove', 'list']);
+	assert.deepEqual(labels('mod '), ['install', 'update', 'remove', 'list', 'help']);
 	assert.equal(h.items[0]!.prefix, false);
 	assert.ok(h.usage);
 });
@@ -83,7 +84,7 @@ test('alias resolves in the path', () => {
 test('nested subcommands', () => {
 	const h = computeHints(catalog, 'claude auth ');
 	assert.equal(h.stage, 'sub');
-	assert.deepEqual(h.items.map(i => i.label), ['login', 'logout']);
+	assert.deepEqual(h.items.map(i => i.label), ['login', 'logout', 'help']);
 });
 
 test('unmatched partial subcommand falls back to the argument stage', () => {
@@ -153,4 +154,61 @@ test('usage-only results carry a usage and no items', () => {
 		assert.equal(h.items.length, 0, line);
 		assert.ok(h.usage, line);
 	}
+});
+
+test('subcommand items carry their own usage', () => {
+	const h = computeHints(catalog, 'doc ');
+	const ask = h.items.find(i => i.label === 'ask')!;
+	assert.equal(ask.usage?.head, 'doc ask');
+	assert.deepEqual(ask.usage?.tokens.map(t => t.text), ['[--new]', '[--model <m>]', '<text…>']);
+	assert.equal(h.items.find(i => i.label === 'help')?.usage?.head, 'doc help');
+});
+
+test('the argument under the cursor carries its doc', () => {
+	const h = computeHints(catalog, 'doc ask ');
+	assert.equal(h.stage, 'arg');
+	assert.equal(h.usage!.tokens[h.usage!.active]?.text, '<text…>');
+	assert.deepEqual(h.usage!.doc, {label: '<text>…', description: 'What to ask'});
+	assert.deepEqual(computeHints(catalog, 'doc auth login ').usage!.doc, {label: '[account]', description: 'Account name'});
+	assert.equal(computeHints(catalog, 'mod install ').usage!.doc, undefined);
+});
+
+test('an option value is skipped and its option documented while typed', () => {
+	const typing = computeHints(catalog, 'doc ask --model ');
+	assert.equal(typing.usage!.active, -1);
+	assert.deepEqual(typing.usage!.doc, {label: '--model <m>, -m', description: 'Model to use'});
+	assert.deepEqual(typing.items, []);
+	assert.deepEqual(computeHints(catalog, 'doc ask -m opu').usage!.doc, {label: '--model <m>, -m', description: 'Model to use'});
+	const after = computeHints(catalog, 'doc ask --model opus ');
+	assert.equal(after.usage!.tokens[after.usage!.active]?.text, '<text…>');
+});
+
+test('a dash at the argument stage lists the option names, not values', () => {
+	assert.deepEqual(labels('doc ask -'), ['--new', '--model']);
+	assert.deepEqual(labels('doc ask -m'), ['-m']);
+	const h = computeHints(catalog, 'doc ask --m');
+	assert.equal(h.stage, 'arg');
+	assert.equal(h.items[0]!.label, '--model');
+	assert.equal(h.items[0]!.description, 'Model to use');
+	assert.equal(h.usage!.doc, undefined);
+	assert.deepEqual(labels('doc ask hello --'), ['--new', '--model']);
+	assert.deepEqual(labels('mod install -'), []);
+	assert.deepEqual(acceptEdit('doc ask --m', h, h.items[0]!), {value: 'doc ask --model ', cursor: 16});
+});
+
+test('a pattern option (--<field>) claims a concrete option and skips its value', () => {
+	const own = buildCatalog([
+		{
+			name: 'acct',
+			description: 'Accounts',
+			usage: 'acct <name> [--<field> <value>]…',
+			args: [{name: 'name', description: 'Account name'}],
+			options: [{name: '--<field>', value: '<value>', description: 'A field of the kind', repeatable: true}],
+			run() {},
+		},
+	]);
+	const typing = computeHints(own, 'acct --login ');
+	assert.deepEqual(typing.usage!.doc, {label: '--<field> <value> …', description: 'A field of the kind'});
+	const after = computeHints(own, 'acct --login bob ');
+	assert.equal(after.usage!.tokens[after.usage!.active]?.text, '<name>');
 });
