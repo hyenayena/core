@@ -1,4 +1,7 @@
-import test from 'node:test';
+import {mkdtempSync, rmSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import path from 'node:path';
+import test, {after} from 'node:test';
 import assert from 'node:assert/strict';
 import React from 'react';
 import {Text} from 'ink';
@@ -9,6 +12,10 @@ import {mountHarness} from '../testkit.js';
 import type {Command, CommandContext, MountControl} from '../../../../src/api.js';
 
 const ENTER = '\r';
+
+// Prefs are saved when a test changes them, so they go to a folder of their own.
+const prefsDir = mkdtempSync(path.join(tmpdir(), 'yena-core-agent-'));
+after(() => rmSync(prefsDir, {recursive: true, force: true}));
 
 function setup(extra: Command[] = [], size = {columns: 100, rows: 30}) {
 	const seen: {user?: CommandContext; agent?: CommandContext} = {};
@@ -45,7 +52,7 @@ function setup(extra: Command[] = [], size = {columns: 100, rows: 30}) {
 }
 
 test('the user context has a command bridge; the agent context has mount but no other UI members', async () => {
-	loadPrefs('/nonexistent-core-agent-test');
+	loadPrefs(prefsDir);
 	const {h, seen, submit} = setup();
 	await submit('grab');
 	assert.ok(seen.user?.commandBridge);
@@ -199,7 +206,7 @@ const GRACE = 400;
 const pastGrace = (h: {settle: (ms?: number) => Promise<void>}) => h.settle(GRACE + 200);
 
 test('an agent view opens the console beside the chat without taking focus, and the console closes after the grace', async () => {
-	loadPrefs('/nonexistent-core-agent-test');
+	loadPrefs(prefsDir);
 	const probe: Probe = {builds: 0};
 	const {h, seen, bridge} = boot({columns: 100, rows: 30}, [peek('peek', probe)]);
 	await h.settle(80);
