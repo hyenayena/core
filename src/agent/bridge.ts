@@ -19,6 +19,7 @@ import {unknownCommandLines} from '../hints/typo.js';
 import {c} from '../hints/style.js';
 import {errorLines} from '../error-lines.js';
 import {createCapture} from './capture.js';
+import {normalizeStyled, plainLines, type NormalStyled} from '../kit/styled.js';
 import {parseLine} from '../parse-line.js';
 import {isQuitLine} from '../view/keys.js';
 import type {AgentMode} from '../view/prefs.js';
@@ -40,6 +41,7 @@ export type BridgeDeps = {
 	catalog: () => Catalog;
 	mode: () => AgentMode;
 	tee: (text: string, color?: string) => void;
+	teeStyled?: (blocks: NormalStyled) => void;
 	clear: () => void;
 	exit: () => void;
 	mountView?: (build: (control: MountControl) => UiElement, print: (text: string) => void) => AgentViewHandle;
@@ -234,6 +236,16 @@ export function createCommandBridge(deps: BridgeDeps): CommandBridge {
 					const clean = sanitizeBlock(typeof text === 'string' ? text : String(text));
 					safeTee(clean);
 					if (capturing) capture(clean);
+				},
+				printStyled: blocks => {
+					const styled = normalizeStyled(blocks);
+					const plain = plainLines(styled).join('\n');
+					if (deps.teeStyled) {
+						try {
+							deps.teeStyled(styled);
+						} catch {}
+					} else if (plain !== '') safeTee(plain);
+					if (capturing && plain !== '') capture(plain);
 				},
 				clear: deps.clear,
 				exit: deps.exit,

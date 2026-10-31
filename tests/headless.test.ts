@@ -49,6 +49,28 @@ test('runs a command with a headless context and sanitizes what it prints', asyn
 	assert.ok(seen?.commandBridge);
 });
 
+test('styled output prints the plain form, without escapes or decoration', async () => {
+	const probe: Command = {
+		name: 'probe',
+		description: 'Probe',
+		run: (_a, ctx) =>
+			ctx.printStyled!([
+				{kind: 'table', head: ['Name', 'State'], rows: [[{text: 'a', tone: 'accent', bold: true}, {text: 'ok\x1b]0;t\x07', tone: 'ok'}]]},
+				{kind: 'rule'},
+				{kind: 'line', spans: [{text: 'Saved ', decor: true}, 'file']},
+			]),
+	};
+	const {out, error} = await capture(() => headless(yenaWith([probe]), {args: ['probe']}));
+	assert.equal(error, undefined);
+	assert.equal(out, 'a  ok\nfile\n');
+});
+
+test('styled output with nothing plain prints nothing', async () => {
+	const probe: Command = {name: 'probe', description: 'Probe', run: (_a, ctx) => ctx.printStyled!([{kind: 'rule'}])};
+	const {out} = await capture(() => headless(yenaWith([probe]), {args: ['probe']}));
+	assert.equal(out, '');
+});
+
 test('an unknown command fails with exit code 2 and a suggestion', async () => {
 	const {error} = await capture(() => headless(yenaWith([]), {args: ['ehco', 'x']}));
 	assert.equal(error?.exitCode, 2);

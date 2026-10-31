@@ -5,6 +5,7 @@ import {buildCatalog} from './hints/catalog.js';
 import {completionLines} from './hints/catalog-lines.js';
 import {walkPath} from './hints/path.js';
 import {sanitizeBlock} from './hints/sanitize.js';
+import {plainLines} from './kit/styled.js';
 import {unknownCommandLines} from './hints/typo.js';
 import {parseLine} from './parse-line.js';
 import {getPrefs, loadPrefs} from './view/prefs.js';
@@ -40,6 +41,10 @@ const headless: HeadlessMain = async (yena, request) => {
 	};
 	const ctx: CommandContext = {
 		print,
+		printStyled: blocks => {
+			const lines = plainLines(blocks);
+			if (lines.length > 0) process.stdout.write(`${lines.join('\n')}\n`);
+		},
 		clear() {},
 		exit() {},
 		headless: true,

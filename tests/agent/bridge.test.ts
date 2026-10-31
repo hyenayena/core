@@ -7,7 +7,7 @@ import {createRegistry} from '../../src/commands.js';
 import type {AgentMode} from '../../src/view/prefs.js';
 import {fakeLogger} from '../testkit.js';
 
-type Setup = {commands?: Command[]; mode?: AgentMode; mountView?: BridgeDeps['mountView']; hooks?: Pick<BridgeDeps, 'beforeRun' | 'endRun'>};
+type Setup = {commands?: Command[]; mode?: AgentMode; mountView?: BridgeDeps['mountView']; hooks?: Pick<BridgeDeps, 'beforeRun' | 'endRun'>; teeStyled?: BridgeDeps['teeStyled']};
 
 function setup(opts: Setup = {}) {
 	const commands: Command[] = opts.commands ?? [];
@@ -32,6 +32,7 @@ function setup(opts: Setup = {}) {
 		afterRun: () => afterRun.push(1),
 		...(opts.mountView && {mountView: opts.mountView}),
 		...(opts.hooks && opts.hooks),
+		...(opts.teeStyled && {teeStyled: opts.teeStyled}),
 		log,
 	});
 	return {bridge, commands, state, tee, cleared, afterRun, records};
@@ -269,7 +270,7 @@ test('list reflects commands added later and carries effective policies', async 
 	assert.deepEqual(names, ['a:safe', 'late:confirm']);
 });
 
-test('the agent context offers print, clear, exit and signal only', async () => {
+test('the agent context offers print, printStyled, clear, exit and signal only', async () => {
 	let keys: string[] = [];
 	const probe: Command = {
 		name: 'probe',
@@ -282,8 +283,51 @@ test('the agent context offers print, clear, exit and signal only', async () => 
 	};
 	const s = setup({commands: [probe]});
 	await run(s, 'probe');
-	assert.deepEqual(keys, ['clear', 'exit', 'print', 'signal']);
+	assert.deepEqual(keys, ['clear', 'exit', 'print', 'printStyled', 'signal']);
 	assert.deepEqual(s.cleared, [1]);
+});
+
+const styledCommand = (name: string): Command => ({
+	name,
+	description: name,
+	agent: 'safe',
+	run: (_a, ctx) =>
+		ctx.printStyled!([
+			{kind: 'line', spans: [{text: 'Done ', decor: true}, {text: 'path', tone: 'accent'}]},
+			{kind: 'rule'},
+			{kind: 'table', head: ['A', 'B'], rows: [['x', 'y\u001b[31m']]},
+		]),
+});
+
+test('styled output: the capture gets the plain form, the tee the styled blocks', async () => {
+	const teed: unknown[] = [];
+	const s = setup({commands: [styledCommand('st')], teeStyled: blocks => void teed.push(blocks)});
+	const r = await run(s, 'st');
+	assert.equal(r.status, 'ok');
+	assert.equal(r.output, 'path\nx  y');
+	assert.equal(teed.length, 1);
+	const blocks = teed[0] as {kind: string}[];
+	assert.deepEqual(blocks.map(b => b.kind), ['line', 'rule', 'table']);
+	assert.ok(!s.tee.some(t => t.text.includes('path')));
+});
+
+test('styled output without a styled tee is teed as plain text', async () => {
+	const s = setup({commands: [styledCommand('st')]});
+	const r = await run(s, 'st');
+	assert.equal(r.output, 'path\nx  y');
+	assert.ok(s.tee.some(t => t.text === 'path\nx  y'));
+});
+
+test('a throwing styled tee does not lose the capture', async () => {
+	const s = setup({
+		commands: [styledCommand('st')],
+		teeStyled: () => {
+			throw new Error('boom');
+		},
+	});
+	const r = await run(s, 'st');
+	assert.equal(r.status, 'ok');
+	assert.equal(r.output, 'path\nx  y');
 });
 
 test('log records carry metadata only: no line, args or output', async () => {

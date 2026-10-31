@@ -13,6 +13,7 @@ import type {
 	MountControl,
 	MountTarget,
 	PrintOptions,
+	StyledBlock,
 	UiElement,
 	ViewHost,
 } from '../../../src/api.js';
@@ -25,7 +26,8 @@ import {errorLines} from './error-lines.js';
 import {parseLine} from './parse-line.js';
 import {createCommandBridge, type AgentViewHandle} from './agent/bridge.js';
 import {unknownCommandLines} from './hints/typo.js';
-import {c} from './hints/style.js';
+import {c, colorEnabled} from './hints/style.js';
+import {normalizeStyled, plainLines, renderStyled} from './kit/styled.js';
 import {focusMove, isConsoleToggle, isHostKey, isQuitLine} from './view/keys.js';
 import type {ViewCommandHost, ViewCommandInfo} from './view/view-commands.js';
 import {ViewLayoutContext} from './view/use-view-host.js';
@@ -453,6 +455,12 @@ export default function App({
 			return (at < 0 ? [...prev, line] : [...prev.slice(0, at), line, ...prev.slice(at)]).slice(-MAX_LINES);
 		});
 	};
+	const printMainStyled = (blocks: unknown) => {
+		const styled = normalizeStyled(blocks);
+		const plain = plainLines(styled);
+		if (plain.length === 0) return;
+		printMain(plain.join('\n'), undefined, {render: w => renderStyled(styled, w, {color: colorEnabled()})});
+	};
 	const scrollBy = (delta: number) => {
 		const viewport = anchoredViewport();
 		setAnchor(a => scrollAnchor(linesRef.current, a, delta, rowCache, widthRef.current, viewport));
@@ -481,6 +489,11 @@ export default function App({
 			setPanelScroll(s => s + rows);
 		}
 	};
+	const printPanelStyled = (blocks: unknown) => {
+		const styled = normalizeStyled(blocks);
+		if (plainLines(styled).length === 0) return;
+		printPanel(renderStyled(styled, Math.max(1, live.current.panelInner - 1), {color: colorEnabled()}));
+	};
 	const panelScrollBy = (delta: number) =>
 		setPanelScroll(s =>
 			Math.max(0, Math.min(Math.max(0, panelRowsRef.current.length - live.current.panelOutputRows), s + delta)),
@@ -488,6 +501,7 @@ export default function App({
 	const sideRef = useRef(side);
 	sideRef.current = side;
 	const printConsole = (text: string, color?: string) => (sideRef.current ? printPanel : printMain)(text, color);
+	const printConsoleStyled = (blocks: unknown) => (sideRef.current ? printPanelStyled : printMainStyled)(blocks);
 
 	const mountActivity = (
 		build: (control: MountControl) => UiElement,
@@ -575,14 +589,15 @@ export default function App({
 	};
 
 	const mountAgentView = (build: (control: MountControl) => UiElement, print: (text: string) => void) => mountActivity(build, print, true);
-	const bridgeDeps = useRef({tee: printConsole, clear: clearAll, afterRun: refreshCatalog, mountView: mountAgentView, beforeRun: startOwner, endRun: endOwner});
-	bridgeDeps.current = {tee: printConsole, clear: clearAll, afterRun: refreshCatalog, mountView: mountAgentView, beforeRun: startOwner, endRun: endOwner};
+	const bridgeDeps = useRef({tee: printConsole, teeStyled: printConsoleStyled, clear: clearAll, afterRun: refreshCatalog, mountView: mountAgentView, beforeRun: startOwner, endRun: endOwner});
+	bridgeDeps.current = {tee: printConsole, teeStyled: printConsoleStyled, clear: clearAll, afterRun: refreshCatalog, mountView: mountAgentView, beforeRun: startOwner, endRun: endOwner};
 	const bridgeRef = useRef<CommandBridge | null>(null);
 	bridgeRef.current ??= createCommandBridge({
 		find: name => registry.find(name),
 		catalog: () => buildCatalog(registry.commands),
 		mode: () => getPrefs().agentCommands,
 		tee: (text, color) => bridgeDeps.current.tee(text, color),
+		teeStyled: blocks => bridgeDeps.current.teeStyled(blocks),
 		clear: () => bridgeDeps.current.clear(),
 		exit,
 		mountView: (build, print) => bridgeDeps.current.mountView(build, print),
@@ -593,11 +608,12 @@ export default function App({
 	});
 	const commandBridge = bridgeRef.current;
 
-	const makeCtx = (print: (text: string, color?: string) => void): CommandContext => {
+	const makeCtx = (print: (text: string, color?: string) => void, styled: (blocks: readonly StyledBlock[]) => void): CommandContext => {
 		let ownsMain = false;
 		const out = (text: string, color?: string) => (ownsMain ? printMain : print)(text, color);
 		return {
 			print: text => out(text),
+			printStyled: blocks => (ownsMain ? printMainStyled : styled)(blocks),
 			clear: clearAll,
 			exit,
 			copyToClipboard: text => copyToClipboard(stdout, text),
@@ -612,9 +628,15 @@ export default function App({
 		};
 	};
 
-	const runCommand = async (command: Command, name: string, args: string[], print: (text: string, color?: string) => void) => {
+	const runCommand = async (
+		command: Command,
+		name: string,
+		args: string[],
+		print: (text: string, color?: string) => void,
+		styled: (blocks: readonly StyledBlock[]) => void,
+	) => {
 		try {
-			await command.run(args, makeCtx(print));
+			await command.run(args, makeCtx(print, styled));
 		} catch (error) {
 			log.warn('command failed', {command: name, err: error});
 			errorLines(error).forEach((text, i) => print(i === 0 ? `Error: ${text}` : `  ${text}`, c('red')));
@@ -629,7 +651,7 @@ export default function App({
 			try {
 				name = String(command.name);
 			} catch {}
-			void runCommand(command, name, [], printMain);
+			void runCommand(command, name, [], printMain, printMainStyled);
 		}
 	}, [registry]);
 
@@ -653,7 +675,7 @@ export default function App({
 			for (const text of unknownCommandLines(catalog, name)) printConsole(text, c('red'));
 			return;
 		}
-		await runCommand(command, name, args, printConsole);
+		await runCommand(command, name, args, printConsole, printConsoleStyled);
 	};
 
 	submitRef.current = handleSubmit;

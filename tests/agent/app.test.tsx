@@ -514,3 +514,54 @@ test('a console that was already open before the run is never closed by the grac
 	assert.match(h.lastFrame(), /Console/);
 	h.unmount();
 });
+
+const styledTable: Command = {
+	name: 'tbl',
+	description: 'print a styled table',
+	agent: 'safe',
+	run: (_a, ctx) =>
+		ctx.printStyled!([
+			{kind: 'table', head: ['Name', 'State', 'Note'], flex: 2, rows: [
+				[{text: 'alpha', tone: 'accent'}, {text: 'done', tone: 'ok'}, 'n'.repeat(200)],
+				['b', {text: 'todo', tone: 'warn'}, 'short'],
+			]},
+			{kind: 'rule'},
+		]),
+};
+
+const ESC = String.fromCharCode(27);
+const strip = (s: string) => s.replace(new RegExp(`${ESC}\\[[0-9;?]*[A-Za-z]`, 'g'), '');
+
+test('a styled print in the console shows colours and aligned columns within the width', async () => {
+	loadPrefs(prefsDir);
+	setPrefs({colors: true});
+	const {h, submit} = setup([styledTable], {columns: 60, rows: 30});
+	await submit('tbl');
+	await h.settle(50);
+	const frame = h.lastFrame();
+	assert.ok(frame.includes(`${ESC}[36malpha`));
+	assert.ok(frame.includes(`${ESC}[32mdone`));
+	const rows = strip(frame).split('\n');
+	const head = rows.find(r => r.includes('Name'))!;
+	const alpha = rows.find(r => r.includes('alpha'))!;
+	const b = rows.find(r => /\bb +todo/.test(r))!;
+	assert.equal(alpha.indexOf('done'), head.indexOf('State'));
+	assert.equal(b.indexOf('todo'), head.indexOf('State'));
+	assert.ok(alpha.includes('…'));
+	assert.ok(rows.some(r => r.includes('─')));
+	for (const r of rows) assert.ok(r.length <= 59, r);
+	h.unmount();
+});
+
+test('an agent styled print reaches the console styled and the capture plain', async () => {
+	loadPrefs(prefsDir);
+	setPrefs({colors: true});
+	const {h, seen, submit} = setup([styledTable], {columns: 100, rows: 30});
+	await submit('grab');
+	const result = await seen.user!.commandBridge!.run({line: 'tbl', caller: 'tester'});
+	assert.equal(result.status, 'ok');
+	assert.equal(result.output, `alpha  done  ${'n'.repeat(200)}\nb  todo  short`);
+	await h.settle(50);
+	assert.ok(h.allOutput().includes(`${ESC}[33mtodo`));
+	h.unmount();
+});
