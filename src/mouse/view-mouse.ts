@@ -9,6 +9,7 @@ export type ViewMouseEvent = {
 	shift: boolean;
 	meta: boolean;
 	ctrl: boolean;
+	region?: 'header';
 };
 
 export type ViewMouseHost = {

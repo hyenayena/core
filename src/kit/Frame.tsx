@@ -1,16 +1,7 @@
 import React from 'react';
 import {Box, Text} from 'ink';
 import {sanitizeBlock} from '../hints/sanitize.js';
-import type {FrameRow, Tone} from './types.js';
-
-const TONE: Record<Tone, {color?: string; dim?: boolean}> = {
-	plain: {},
-	dim: {dim: true},
-	add: {color: 'green'},
-	del: {color: 'red'},
-	warn: {color: 'yellow'},
-	info: {color: 'cyan'},
-};
+import {TONE_STYLE as TONE, type FrameRow} from './types.js';
 
 export function Frame({rows, width}: {rows: FrameRow[]; width: number}) {
 	const rule = '─'.repeat(Math.max(2, Math.min(width, 72)));

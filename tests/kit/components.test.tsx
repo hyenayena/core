@@ -2,7 +2,7 @@ import React from 'react';
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {Text} from 'ink';
-import {BrailleBar, Frame, LabeledInput, labeledInputRows, ListPicker, Spinner, SPINNERS, StatusBar, useSpinnerFrame} from '../../src/kit/ui.js';
+import {BrailleBar, Frame, LabeledInput, labeledInputRows, ListPicker, SpanRows, Spinner, SPINNERS, StatusBar, useSpinnerFrame} from '../../src/kit/ui.js';
 import {hangingRows, stringCells} from '../../src/kit/text.js';
 import {mountHarness, wait} from '../testkit.js';
 
@@ -201,4 +201,40 @@ test('ListPicker: the selected item is shown in full; the others stay one row', 
 	assert.match(frame, /second alpha.*…/, 'an unselected item keeps one row');
 	assert.ok(frame.split('\n').every(r => stringCells(r) <= 29));
 	h.unmount();
+});
+
+test('SpanRows: one row per entry, sanitised spans, NO_COLOR drops colours but keeps bold, dim and inverse', async () => {
+	const rows = [
+		[{text: '╭ '}, {text: `agent${ESC}[2J\nx`, tone: 'info' as const, bold: true, inverse: true}, {text: ' ╮'}],
+		[],
+		[{text: 'DONE', tone: 'add' as const}, {text: ' old', tone: 'dim' as const}],
+	];
+	const h = mountHarness(<SpanRows rows={rows} />);
+	await h.settle();
+	const out = plain(h.lastFrame()).split('\n');
+	assert.equal(out[0], '╭ agent x ╮');
+	assert.equal(out[1]?.trim(), '');
+	assert.equal(out[2], 'DONE old');
+	assert.ok(!h.allOutput().includes(`${ESC}[2J`));
+	h.unmount();
+
+	type El = React.ReactElement<{children?: El | El[]; color?: string; dimColor?: boolean; bold?: boolean; inverse?: boolean}>;
+	const spanProps = () => {
+		const root = SpanRows({rows}) as El;
+		const lines = ([] as El[]).concat(root.props.children ?? []);
+		return lines.flatMap(line => ([] as El[]).concat(line.props.children ?? []).filter(c => typeof c === 'object')).map(c => c.props);
+	};
+	const prev = process.env['NO_COLOR'];
+	try {
+		delete process.env['NO_COLOR'];
+		assert.ok(spanProps().some(p => p.color === 'cyan'));
+		process.env['NO_COLOR'] = '1';
+		const props = spanProps();
+		assert.ok(props.every(p => p.color === undefined));
+		assert.ok(props.some(p => p.bold === true && p.inverse === true));
+		assert.ok(props.some(p => p.dimColor === true));
+	} finally {
+		if (prev === undefined) delete process.env['NO_COLOR'];
+		else process.env['NO_COLOR'] = prev;
+	}
 });

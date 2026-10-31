@@ -38,6 +38,7 @@ import {DEFAULT_PREFS, getPrefs, setPrefs, subscribePrefs} from './view/prefs.js
 import {areaAt, inside, toLocal, wheelDelta, type Rect} from './mouse/hit.js';
 import type {MouseInputEvent} from './mouse/sgr.js';
 import type {ViewMouseEvent, ViewMouseHost} from './mouse/view-mouse.js';
+import type {ViewHeaderHost} from './view/header.js';
 import {createRowCache, normalizeAnchor, renderedLine, sameAnchor, scrollAnchor, visibleWindow, type Anchor, type VisibleRow} from './transcript/scroll.js';
 import {
 	createLayoutCache,
@@ -179,6 +180,7 @@ export default function App({
 
 	const [main, setMain] = useState<Mounted | null>(null);
 	const [mainTitle, setMainTitle] = useState<{title: string; detail: string} | undefined>(undefined);
+	const [mainHeader, setMainHeader] = useState<{id: number; element: unknown} | undefined>(undefined);
 	const [panelView, setPanelView] = useState<Mounted | null>(null);
 	const [panelOpen, setPanelOpen] = useState(false);
 	const [focus, setFocus] = useState<Focus>('main');
@@ -203,6 +205,7 @@ export default function App({
 		split: geo.split,
 		panelOpen,
 		hasPanelView: panelView !== null,
+		hasHeader: mainHeader !== undefined,
 		mainColumns: geo.mainColumns,
 		panelInner,
 		rows,
@@ -303,7 +306,7 @@ export default function App({
 		for (const l of [...mouseListeners.current[target]]) if (l.mountId === mountId) mouseListeners.current[target].delete(l);
 	};
 
-	const makeHost = (target: MountTarget, mountId: number): ViewHost & ViewMouseHost & ViewCommandHost => ({
+	const makeHost = (target: MountTarget, mountId: number): ViewHost & ViewMouseHost & ViewCommandHost & ViewHeaderHost => ({
 		runLine: line => {
 			if (typeof line !== 'string' || line.length > RUN_LINE_MAX || /[\p{Cc}\p{Cf}]/u.test(line)) return false;
 			const parsed = parseLine(line);
@@ -356,6 +359,10 @@ export default function App({
 				clean === '' ? undefined : prev?.title === clean && prev.detail === extra ? prev : {title: clean, detail: extra},
 			);
 		},
+		setHeader: element => {
+			if (target !== 'main' || pending.current.main?.id !== mountId) return;
+			setMainHeader(element === null || element === undefined || element === false ? undefined : {id: mountId, element});
+		},
 	});
 
 	const settle = (target: MountTarget, id: number, error?: Error) => {
@@ -367,6 +374,7 @@ export default function App({
 		if (target === 'main') {
 			setMain(null);
 			setMainTitle(undefined);
+			setMainHeader(undefined);
 			setFocus('panel');
 		} else {
 			setPanelView(null);
@@ -705,8 +713,9 @@ export default function App({
 	const panelRef = useRef<DOMElement>(null);
 	const promptMouse = useRef<((e: MouseInputEvent) => boolean) | null>(null);
 	const mainViewRef = useRef<DOMElement>(null);
+	const headerRef = useRef<DOMElement>(null);
 	const consoleBodyRef = useRef<DOMElement>(null);
-	const dispatchToView = (target: MountTarget, e: MouseInputEvent, rect: Rect): boolean => {
+	const dispatchToView = (target: MountTarget, e: MouseInputEvent, rect: Rect, region?: 'header'): boolean => {
 		const mountId = pending.current[target]?.id;
 		if (mountId === undefined || e.kind === 'drag') return false;
 		const local = toLocal(rect, e.x, e.y);
@@ -721,6 +730,7 @@ export default function App({
 			shift: e.shift,
 			meta: e.meta,
 			ctrl: e.ctrl,
+			...(region !== undefined && {region}),
 		});
 		for (const l of [...mouseListeners.current[target]]) {
 			if (l.mountId !== mountId) continue;
@@ -847,6 +857,13 @@ export default function App({
 		}
 		if (selectionMouse(e)) return;
 		if (e.kind === 'drag') return;
+		if (area === 'main' && l.side && l.hasHeader && headerRef.current) {
+			const headerRect = measureElement(headerRef.current);
+			if (inside(headerRect, e.x, e.y)) {
+				dispatchToView('main', e, headerRect, 'header');
+				return;
+			}
+		}
 		const hasView = area === 'main' ? l.side : l.hasPanelView;
 		const box = area === 'main' ? mainViewRef.current : consoleBodyRef.current;
 		if (hasView && box) {
@@ -979,6 +996,15 @@ export default function App({
 						display={geo.mainColumns > 0 ? 'flex' : 'none'}
 					>
 						{mainTitle !== undefined && <TitleBar {...mainTitle} columns={geo.mainColumns} />}
+						{mainHeader !== undefined && mainHeader.id === main.id && (
+							<Box ref={headerRef} flexDirection="column" flexShrink={0} overflow="hidden">
+								<ViewLayoutContext.Provider value={mainLayout}>
+									<MountBoundary key={'h' + main.id} onError={error => settle('main', main.id, error)}>
+										{mainHeader.element as ReactNode}
+									</MountBoundary>
+								</ViewLayoutContext.Provider>
+							</Box>
+						)}
 						{transcript}
 						<Box ref={mainViewRef} flexDirection="column" flexShrink={0}>
 							<ViewLayoutContext.Provider value={mainLayout}>

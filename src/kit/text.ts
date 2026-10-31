@@ -10,6 +10,21 @@ export {COMMAND_TOOLS, formatCommandList, formatRunResult, resolveCommandLine, t
 export {checkCommandDocs} from '../hints/docs-lint.js';
 export type {Tone, FrameRow, PickerItem} from './types.js';
 export {
+	gridLayout,
+	boxRows,
+	badgeRows,
+	frameAround,
+	joinBlocks,
+	type Span,
+	type SpanRow,
+	type GridLayout,
+	type GridRow,
+	type BoxOptions,
+	type BoxHighlight,
+	type BoxBadge,
+	type FrameOptions,
+} from './boxes.js';
+export {
 	BRAILLE_FILL,
 	brailleCells,
 	brailleRows,
