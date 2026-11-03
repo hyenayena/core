@@ -270,7 +270,7 @@ test('list reflects commands added later and carries effective policies', async 
 	assert.deepEqual(names, ['a:safe', 'late:confirm']);
 });
 
-test('the agent context offers print, printStyled, clear, exit and signal only', async () => {
+test('the agent context offers print, printStyled, clear, exit, signal and caller only', async () => {
 	let keys: string[] = [];
 	const probe: Command = {
 		name: 'probe',
@@ -283,8 +283,19 @@ test('the agent context offers print, printStyled, clear, exit and signal only',
 	};
 	const s = setup({commands: [probe]});
 	await run(s, 'probe');
-	assert.deepEqual(keys, ['clear', 'exit', 'print', 'printStyled', 'signal']);
+	assert.deepEqual(keys, ['caller', 'clear', 'exit', 'print', 'printStyled', 'signal']);
 	assert.deepEqual(s.cleared, [1]);
+});
+
+test('the command sees the sanitized caller, agent by default', async () => {
+	const seen: (string | undefined)[] = [];
+	const probe: Command = {name: 'who', description: 'w', agent: 'safe', run: (_a, ctx) => void seen.push(ctx.caller)};
+	const s = setup({commands: [probe]});
+	await s.bridge.run({line: 'who', caller: 'sched\u001buler'});
+	await s.bridge.run({line: 'who', caller: ''});
+	await s.bridge.run({line: 'who'} as never);
+	assert.equal(seen[0]?.includes('\u001b'), false);
+	assert.deepEqual(seen.slice(1), ['agent', 'agent']);
 });
 
 const styledCommand = (name: string): Command => ({

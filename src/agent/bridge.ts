@@ -250,6 +250,7 @@ export function createCommandBridge(deps: BridgeDeps): CommandBridge {
 				clear: deps.clear,
 				exit: deps.exit,
 				signal: controller.signal,
+				caller,
 			};
 
 			const mountView = deps.mountView;
