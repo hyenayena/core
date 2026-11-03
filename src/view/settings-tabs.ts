@@ -1,7 +1,7 @@
-import type {Command, Setting, SettingAction, SettingsTab} from '../../../../src/api.js';
+import type {Command, Setting, SettingAction, SettingInline, SettingsTab} from '../../../../src/api.js';
 
 const MAX_TABS = 20;
-const MAX_SETTINGS = 20;
+const MAX_SETTINGS = 40;
 const MAX_OPTIONS = 50;
 
 const isText = (v: unknown): v is string => typeof v === 'string' && v !== '';
@@ -15,7 +15,15 @@ function validSetting(raw: unknown): Setting | undefined {
 		.filter(o => o && typeof o === 'object' && typeof o.value === 'string' && isText(o.label))
 		.slice(0, MAX_OPTIONS);
 	if (options.length === 0) return undefined;
-	return {...(s as Setting), options};
+	const {inline: _inline, ...rest} = s as Setting;
+	const inline = validInline(s.inline);
+	return {...rest, options, ...(inline && {inline})};
+}
+
+function validInline(raw: unknown): SettingInline | undefined {
+	const i = raw as Partial<SettingInline> | null;
+	if (!i || typeof i !== 'object' || !isText(i.row)) return undefined;
+	return {row: i.row, ...(isText(i.label) && {label: i.label}), ...(isText(i.section) && {section: i.section})};
 }
 
 function validAction(raw: unknown): SettingAction | undefined {

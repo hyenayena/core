@@ -5,17 +5,23 @@ import {sanitizeText} from '../hints/sanitize.js';
 import {c} from '../hints/style.js';
 import {truncateCells} from '../hints/width.js';
 import {windowStart} from '../kit/window.js';
+import {layoutInlineRows, type InlineSegment} from '../view/inline-rows.js';
 import {useViewHost} from '../view/use-view-host.js';
 import MountBoundary from './MountBoundary.js';
 
 const TEXT_MAX = 200;
 export const SETTINGS_HINT = '↑↓ select · Enter save · ←→ tab · Esc close';
+export const SETTINGS_INLINE_HINT = '↑↓ select · Enter/Space change · ←→ tab · Esc close';
 
-type Option = {setting: Setting; index: number} | {action: SettingAction};
+type Option = {setting: Setting; index: number} | {setting: Setting; cycle: true} | {action: SettingAction};
+
+type Field = {at: number; setting: Setting};
 
 type Line =
 	| {kind: 'label'; key: string; text: string}
 	| {kind: 'description'; key: string; text: string}
+	| {kind: 'section'; key: string; text: string}
+	| {kind: 'inline'; key: string; label: string; section?: string; fields: Field[]}
 	| {kind: 'option'; key: string; text: string; detail: string; at: number; chosen: boolean}
 	| {kind: 'action'; key: string; text: string; detail: string; at: number};
 
@@ -23,40 +29,83 @@ const clean = (text: unknown) => sanitizeText(text, TEXT_MAX);
 
 const message = (error: unknown) => clean(error instanceof Error ? error.message : String(error)) || 'unknown error';
 
-function optionsOf(tab: SettingsTab | undefined): Option[] {
-	const out: Option[] = [];
-	for (const action of tab?.actions ?? []) out.push({action});
-	for (const setting of tab?.settings ?? []) {
-		setting.options.forEach((_o, index) => out.push({setting, index}));
-	}
-	return out;
-}
-
-function linesOf(tab: SettingsTab | undefined, value: (setting: Setting) => string | undefined): Line[] {
+function layoutOf(tab: SettingsTab | undefined, value: (setting: Setting) => string | undefined): {options: Option[]; lines: Line[]} {
+	const options: Option[] = [];
 	const lines: Line[] = [];
-	let at = 0;
 	for (const action of tab?.actions ?? []) {
 		const detail = action.description ? ` — ${clean(action.description)}` : '';
-		lines.push({kind: 'action', key: `a:${action.key}`, text: clean(action.label), detail, at: at++});
+		lines.push({kind: 'action', key: `a:${action.key}`, text: clean(action.label), detail, at: options.length});
+		options.push({action});
 	}
+	let row: {key: string; line: Extract<Line, {kind: 'inline'}>} | undefined;
 	for (const setting of tab?.settings ?? []) {
+		const inline = setting.inline;
+		if (inline) {
+			if (row?.key !== inline.row) {
+				const previous = row?.line;
+				if (inline.section !== undefined && previous?.section !== inline.section) {
+					lines.push({kind: 'section', key: `s:${setting.key}`, text: clean(inline.section)});
+				}
+				const line: Line = {kind: 'inline', key: `i:${setting.key}`, label: clean(inline.label ?? inline.row), fields: []};
+				if (inline.section !== undefined) line.section = inline.section;
+				lines.push(line);
+				row = {key: inline.row, line};
+			}
+			row.line.fields.push({at: options.length, setting});
+			options.push({setting, cycle: true});
+			continue;
+		}
+		row = undefined;
 		lines.push({kind: 'label', key: `l:${setting.key}`, text: clean(setting.label)});
 		if (setting.description) lines.push({kind: 'description', key: `d:${setting.key}`, text: clean(setting.description)});
 		const current = value(setting) ?? '';
-		setting.options.forEach((option, i) => {
+		setting.options.forEach((option, index) => {
 			lines.push({
 				kind: 'option',
-				key: `o:${setting.key}:${i}`,
+				key: `o:${setting.key}:${index}`,
 				text: clean(option.label),
 				detail: option.description ? ` — ${clean(option.description)}` : '',
-				at: at++,
+				at: options.length,
 				chosen: option.value === current,
 			});
+			options.push({setting, index});
 		});
 	}
-	return lines;
+	return {options, lines};
 }
 
+function inlineSegments(lines: Line[], value: (setting: Setting) => string | undefined, cursor: number, width: number): Map<string, InlineSegment[]> {
+	const out = new Map<string, InlineSegment[]>();
+	let i = 0;
+	while (i < lines.length) {
+		const first = lines[i]!;
+		if (first.kind !== 'inline') {
+			i++;
+			continue;
+		}
+		const block: Extract<Line, {kind: 'inline'}>[] = [];
+		while (i < lines.length) {
+			const line = lines[i]!;
+			if (line.kind !== 'inline' || line.section !== first.section) break;
+			block.push(line);
+			i++;
+		}
+		const rows = block.map(line => ({
+			label: line.label,
+			fields: line.fields.map(field => {
+				const current = value(field.setting);
+				const chosen = field.setting.options.find(o => o.value === current);
+				return {
+					options: field.setting.options.map(o => clean(o.label)),
+					...(chosen && {current: clean(chosen.label)}),
+					focused: field.at === cursor,
+				};
+			}),
+		}));
+		layoutInlineRows(rows, width).forEach((segments, r) => out.set(block[r]!.key, segments));
+	}
+	return out;
+}
 type Opened = {id: number; element: React.ReactNode};
 let nextOpened = 0;
 
@@ -80,8 +129,9 @@ export default function Settings({tabs: initial, control, reload}: {tabs: Settin
 	);
 
 	const current = tabs[tab];
-	const options = optionsOf(current);
 	const valueKey = (setting: Setting) => `${tab}:${setting.key}`;
+	const valueOf = (setting: Setting) => values[valueKey(setting)];
+	const {options, lines} = layoutOf(current, valueOf);
 
 	const closeOpened = (id: number, error?: Error) => {
 		if (!alive.current) return;
@@ -131,9 +181,11 @@ export default function Settings({tabs: initial, control, reload}: {tabs: Settin
 		}
 	}, [tab, current]);
 
+	const nextIndex = (setting: Setting) => (setting.options.findIndex(o => o.value === valueOf(setting)) + 1) % setting.options.length;
+
 	const save = (row: Option) => {
 		if ('action' in row) return openAction(row.action);
-		const option = row.setting.options[row.index];
+		const option = row.setting.options['cycle' in row ? nextIndex(row.setting) : row.index];
 		if (!option || saving.current) return;
 		saving.current = true;
 		Promise.resolve()
@@ -167,10 +219,9 @@ export default function Settings({tabs: initial, control, reload}: {tabs: Settin
 			}
 			if (key.upArrow) return setCursor(i => Math.max(0, i - 1));
 			if (key.downArrow) return setCursor(i => Math.min(options.length - 1, i + 1));
-			if (key.return) {
-				const row = options[cursor];
-				if (row) save(row);
-			}
+			const row = options[cursor];
+			if (!row) return;
+			if (key.return || (input === ' ' && 'cycle' in row)) save(row);
 		},
 		{isActive: focused && opened === null},
 	);
@@ -195,10 +246,14 @@ export default function Settings({tabs: initial, control, reload}: {tabs: Settin
 		);
 	}
 
-	const lines = linesOf(current, s => values[valueKey(s)]);
-	const focusLine = Math.max(0, lines.findIndex(l => (l.kind === 'option' || l.kind === 'action') && l.at === cursor));
+	const focusLine = Math.max(
+		0,
+		lines.findIndex(l => ((l.kind === 'option' || l.kind === 'action') && l.at === cursor) || (l.kind === 'inline' && l.fields.some(f => f.at === cursor))),
+	);
 	let labelLine = focusLine;
-	while (labelLine > 0 && lines[labelLine]?.kind !== 'label') labelLine--;
+	while (labelLine > 0 && lines[labelLine]?.kind !== 'label' && lines[labelLine]?.kind !== 'section') labelLine--;
+	const segments = inlineSegments(lines, valueOf, cursor, width);
+	const hint = options[cursor] && 'cycle' in options[cursor] ? SETTINGS_INLINE_HINT : SETTINGS_HINT;
 	const budget = Math.max(1, height - 2 - (status ? 1 : 0));
 	const start = windowStart(lines.length, budget, focusLine, labelLine);
 	const visible = lines.slice(start, start + budget);
@@ -218,7 +273,7 @@ export default function Settings({tabs: initial, control, reload}: {tabs: Settin
 				</Text>,
 			)}
 			{visible.map(line => {
-				if (line.kind === 'label') {
+				if (line.kind === 'label' || line.kind === 'section') {
 					return row(
 						line.key,
 						<Text bold wrap="truncate-end">
@@ -231,6 +286,18 @@ export default function Settings({tabs: initial, control, reload}: {tabs: Settin
 						line.key,
 						<Text dimColor wrap="truncate-end">
 							{fit(line.text)}
+						</Text>,
+					);
+				}
+				if (line.kind === 'inline') {
+					return row(
+						line.key,
+						<Text wrap="truncate-end">
+							{(segments.get(line.key) ?? []).map((segment, i) => (
+								<Text key={i} inverse={segment.focused === true && focused}>
+									{segment.text}
+								</Text>
+							))}
 						</Text>,
 					);
 				}
@@ -262,7 +329,7 @@ export default function Settings({tabs: initial, control, reload}: {tabs: Settin
 			{row(
 				'hint',
 				<Text dimColor wrap="truncate-end">
-					{fit(SETTINGS_HINT + more)}
+					{fit(hint + more)}
 				</Text>,
 			)}
 		</Box>

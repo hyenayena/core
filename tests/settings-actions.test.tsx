@@ -2,7 +2,7 @@ import React, {useEffect} from 'react';
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {Text, useInput} from 'ink';
-import type {MountControl, SettingsTab} from '../../../src/api.js';
+import type {MountControl, Setting, SettingsTab} from '../../../src/api.js';
 import Settings from '../src/components/Settings.js';
 import {collectSettingsTabs} from '../src/view/settings-tabs.js';
 import {mountHarness} from './testkit.js';
@@ -88,4 +88,27 @@ test('collectSettingsTabs keeps valid actions, drops broken ones, and keeps a ta
 		{name: 'b', description: '', run() {}, settings: {title: 'Empty', settings: [], actions: []}},
 	]);
 	assert.deepEqual(tabs.map(t => [t.title, t.actions?.map(a => a.key)]), [['Only actions', ['k']]]);
+});
+
+test('collectSettingsTabs strips a malformed inline but keeps the setting, and holds up to 40 settings', () => {
+	const base = {options: [{value: 'a', label: 'A'}], get: () => 'a', set() {}};
+	const settings = [
+		{...base, key: 'ok', label: 'Ok', inline: {row: 'r', label: 'Row', section: 'S', extra: 1}},
+		{...base, key: 'trim', label: 'Trim', inline: {row: 'r', label: '', section: 7}},
+		{...base, key: 'norow', label: 'No row', inline: {label: 'x'}},
+		{...base, key: 'str', label: 'Str', inline: 'r'},
+		...Array.from({length: 50}, (_v, i) => ({...base, key: `k${i}`, label: `K${i}`})),
+	] as unknown as Setting[];
+	const [tab] = collectSettingsTabs([{name: 'a', description: '', run() {}, settings: {title: 'T', settings}}]);
+	assert.equal(tab?.settings.length, 40);
+	assert.deepEqual(
+		tab?.settings.slice(0, 4).map(s => [s.key, s.inline]),
+		[
+			['ok', {row: 'r', label: 'Row', section: 'S'}],
+			['trim', {row: 'r'}],
+			['norow', undefined],
+			['str', undefined],
+		],
+	);
+	assert.equal('inline' in tab!.settings[2]!, false);
 });
