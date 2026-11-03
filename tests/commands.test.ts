@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
-import type {Command, CommandContext, SettingsTab} from '../../../src/api.js';
+import type {Command, CommandContext, SettingsTab, StyledBlock} from '../../../src/api.js';
 import {createRegistry} from '../src/commands.js';
 
-const ctxWith = (out: string[]): CommandContext => ({print: t => void out.push(t), clear() {}, exit() {}});
+const ctxWith = (out: string[]): CommandContext => ({print: t => void out.push(...t.split('\n')), clear() {}, exit() {}});
 
 test('find returns one stable help-aware wrapper whose getters stay live', async () => {
 	let title = 'First';
@@ -49,4 +49,19 @@ test('help with a path prints that node; an unknown path throws', async () => {
 	const list: string[] = [];
 	await registry.find('help')!.run([], ctxWith(list));
 	assert.equal(list.at(-1), 'help <command> [subcommand…] shows details');
+});
+
+test('help goes to printStyled as line blocks when the context has it', async () => {
+	const registry = createRegistry([{name: 'x', description: 'X', subcommands: [{name: 'go', usage: 'x go', description: 'Go'}], run() {}}]);
+	const printed: string[] = [];
+	const styled: StyledBlock[][] = [];
+	await registry.find('help')!.run(['x'], {...ctxWith(printed), printStyled: b => void styled.push([...b])});
+	assert.deepEqual(printed, []);
+	assert.equal(styled.length, 1);
+	const blocks = styled[0]!;
+	assert.equal(blocks.every(b => b.kind === 'line'), true);
+	const spans = blocks.flatMap(b => (b.kind === 'line' ? b.spans : [])).filter(s => typeof s !== 'string');
+	assert.deepEqual(spans[0], {text: 'Usage:', bold: true});
+	assert.equal(spans.some(s => s.text === 'go' && s.tone === 'accent'), true);
+	assert.equal(spans.some(s => s.text === 'Go' && s.tone === 'muted'), true);
 });

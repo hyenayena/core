@@ -7,6 +7,8 @@ import {createRegistry} from '../../src/commands.js';
 import {mountHarness} from '../testkit.js';
 import type {Command, MountControl} from '../../../../src/api.js';
 
+const SGR = new RegExp(String.fromCharCode(27) + '\\[[0-9;]*m', 'g');
+
 const sample: Command[] = [
 	{name: 'mod', description: 'Manage modules', run: () => {}},
 	{name: 'claude', description: 'Ask Claude', run: () => {}},
@@ -170,9 +172,9 @@ test('help and help <command> list sanitised data', async () => {
 	const h = setup();
 	await h.settle();
 	await submit(h, 'help');
-	assert.match(h.lastFrame(), /^ {2}mod\s+Manage modules/m);
+	assert.match(h.lastFrame().replace(SGR, ''), /^ {2}mod\s+Manage modules/m);
 	await submit(h, 'help mod');
-	assert.match(h.lastFrame(), /^Usage: mod$/m);
+	assert.match(h.lastFrame().replace(SGR, ''), /^Usage: mod$/m);
 	h.unmount();
 });
 

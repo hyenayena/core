@@ -2,7 +2,8 @@ import type {Command, CommandContext, SettingsTab} from '../../../src/api.js';
 import {collectSettingsTabs} from './view/settings-tabs.js';
 import {AGENT_MODES, getPrefs, setPrefs, TITLE_BAR_COLORS, type AgentMode, type TitleBarColor} from './view/prefs.js';
 import {buildCatalog, type Catalog} from './hints/catalog.js';
-import {helpError, helpLines} from './hints/help.js';
+import {helpBlocks, helpError, helpLines} from './hints/help.js';
+import {MAX_STYLED_BLOCKS, printStyled} from './kit/styled.js';
 import {helpTarget} from './hints/path.js';
 
 const LABEL: Record<TitleBarColor, string> = {olive: 'Olive', blue: 'Blue', teal: 'Teal', gray: 'Gray', inverse: 'Inverse'};
@@ -72,7 +73,9 @@ export type Registry = {
 function printHelp(catalog: Catalog, path: readonly string[], ctx: CommandContext): void {
 	const problem = helpError(catalog, path);
 	if (problem !== undefined) throw new Error(problem);
-	for (const line of helpLines(catalog, path)) ctx.print(line);
+	const blocks = helpBlocks(catalog, path);
+	if (blocks.length > MAX_STYLED_BLOCKS) ctx.print(helpLines(catalog, path).join('\n'));
+	else printStyled(ctx, blocks);
 }
 
 export function createRegistry(extra: Command[]): Registry {
