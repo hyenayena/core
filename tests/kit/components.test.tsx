@@ -246,3 +246,14 @@ test('SpanRows: one row per entry, sanitised spans, NO_COLOR drops colours but k
 		resetColorDepthCacheForTests();
 	}
 });
+
+test('Frame: a styled row keeps SGR and drops other control sequences', async () => {
+	const rows = [{text: `${ESC}[32mgreen${ESC}[0m ${ESC}]0;t\u0007x${ESC}[2Jy`, tone: 'plain' as const, styled: true as const}];
+	const h = mountHarness(<Frame rows={rows} width={20} />);
+	await h.settle();
+	const raw = h.lastFrame();
+	assert.match(plain(raw), /│ green xy/);
+	assert.ok(!raw.includes(`${ESC}[2J`));
+	assert.ok(!raw.includes(`${ESC}]`));
+	h.unmount();
+});

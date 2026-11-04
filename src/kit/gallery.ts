@@ -1,4 +1,5 @@
-import {sanitizeBlock, sanitizeText} from '../hints/sanitize.js';
+import {sanitizeText} from '../hints/sanitize.js';
+import {sanitizeStyled} from './styled-sanitize.js';
 import {wrapRows} from '../transcript/wrap.js';
 import {SGR_ATTR, paintTone, withColorDepth, type ColorDepth} from './theme.js';
 
@@ -84,19 +85,10 @@ export async function loadGallery(names: readonly string[]): Promise<LoadedGalle
 	return Promise.all(chosen.map(loadOne));
 }
 
-const SGR_TOKEN = new RegExp(`(${String.fromCharCode(27)}\\[[0-9;]{0,64}m)`);
-
-function cleanRow(row: string): string {
-	return row
-		.split(SGR_TOKEN)
-		.map((part, i) => (i % 2 === 1 ? part : sanitizeBlock(part).replace(/\n/g, ' ')))
-		.join('');
-}
-
 function rowsOf(lines: readonly string[], width: number): string[] {
 	const out: string[] = [];
 	for (const line of lines) {
-		for (const row of String(line).split('\n')) out.push(...wrapRows(cleanRow(row), width));
+		for (const row of String(line).split('\n')) out.push(...wrapRows(sanitizeStyled(row), width));
 	}
 	return out;
 }

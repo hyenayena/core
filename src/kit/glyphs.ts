@@ -17,6 +17,13 @@ export const GLYPHS = Object.freeze({
 	cornerBr: {char: '╯', ascii: '+'},
 	tee: {char: '├', ascii: '+'},
 	bar: {char: '▏', ascii: '|'},
+	fold: {char: '⋯', ascii: '~'},
+	minus: {char: '−', ascii: '-'},
+	fileCode: {char: '◇', ascii: '*'},
+	fileDoc: {char: '¶', ascii: '#'},
+	fileData: {char: '≡', ascii: '='},
+	fileShell: {char: '$', ascii: '$'},
+	fileOther: {char: '▫', ascii: '-'},
 } satisfies Record<string, GlyphDef>);
 
 export type GlyphName = keyof typeof GLYPHS;

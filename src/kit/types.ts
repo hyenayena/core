@@ -2,7 +2,7 @@ import type {ThemeTone} from './theme.js';
 
 export type Tone = 'plain' | 'dim' | 'add' | 'del' | 'warn' | 'info';
 
-export type FrameRow = {text: string; tone: Tone};
+export type FrameRow = {text: string; tone: Tone; styled?: true};
 
 export type PickerItem = {id: string; label: string; meta?: string};
 

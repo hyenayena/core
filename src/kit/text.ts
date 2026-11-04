@@ -8,6 +8,21 @@ export {inputRowCount, inputWindow, offsetAtCell, type InputWindowRow} from './i
 export {hangingRows} from './hanging.js';
 export {COMMAND_TOOLS, formatCommandList, formatRunResult, resolveCommandLine, type CommandToolSpec, type ResolvedCommandLine} from './agent.js';
 export {checkCommandDocs} from '../hints/docs-lint.js';
+export {sanitizeStyled} from './styled-sanitize.js';
+export {tokenizeWords, wordDiff, pairRuns, type Range} from './word-diff.js';
+export {
+	prepareDiffCard,
+	renderDiffCard,
+	fileKindGlyph,
+	SIDE_BY_SIDE_MIN_WIDTH,
+	type DiffCard,
+	type DiffCardRow,
+	type CodeToken,
+	type DiffHighlighter,
+	type PrepareOptions,
+	type RenderOptions,
+	type PreparedDiffCard,
+} from './diff-card.js';
 export type {Tone, FrameRow, PickerItem} from './types.js';
 export {
 	gridLayout,
