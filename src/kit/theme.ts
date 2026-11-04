@@ -20,6 +20,9 @@ export const THEME_TONES = [
 	'focus',
 	'frame',
 	'surface',
+	'heading',
+	'link',
+	'code.inline',
 	'code.keyword',
 	'code.string',
 	'code.number',
@@ -54,6 +57,7 @@ export type Theme = Readonly<Record<ThemeTone, ToneDef>>;
 const B = {bold: true} as const;
 const D = {dim: true} as const;
 const I = {italic: true} as const;
+const U = {underline: true} as const;
 
 const def = (truecolor: ToneDef['truecolor'], c256: ToneDef['c256'], c16: ToneDef['c16'], none: Attrs = {}): ToneDef => ({truecolor, c256, c16, none});
 
@@ -76,6 +80,9 @@ const DARK: Record<ThemeTone, ToneDef> = {
 	focus: def({fg: '#61afef', ...B}, {fg: 75, ...B}, {fg: 4, ...B}, B),
 	frame: def({fg: '#5c6370'}, {fg: 241}, D, D),
 	surface: def({bg: '#3a3a3a'}, {bg: 237}, {bg: 8}),
+	heading: def({fg: '#61afef', ...B}, {fg: 75, ...B}, {fg: 4, ...B}, B),
+	link: def({fg: '#56b6c2', ...U}, {fg: 73, ...U}, {fg: 6, ...U}, U),
+	'code.inline': def({fg: '#d19a66'}, {fg: 173}, {fg: 3}),
 	'code.keyword': def({fg: '#c678dd'}, {fg: 170}, {fg: 5}),
 	'code.string': def({fg: '#98c379'}, {fg: 114}, {fg: 2}),
 	'code.number': def({fg: '#d19a66'}, {fg: 173}, {fg: 3}),

@@ -42,6 +42,12 @@ test('SGR forms per depth', () => {
 	assert.equal(toneSgr('muted', '256'), `${ESC}[38;5;245m`);
 	assert.equal(toneSgr('muted', 'none'), `${ESC}[2m`);
 	assert.equal(toneSgr('focus', '16'), `${ESC}[1;34m`);
+	assert.equal(toneSgr('heading', 'truecolor'), `${ESC}[1;38;2;97;175;239m`);
+	assert.equal(toneSgr('heading', 'none'), `${ESC}[1m`);
+	assert.equal(toneSgr('link', '16'), `${ESC}[4;36m`);
+	assert.equal(toneSgr('link', 'none'), `${ESC}[4m`);
+	assert.equal(toneSgr('code.inline', '256'), `${ESC}[38;5;173m`);
+	assert.equal(toneSgr('code.inline', 'none'), '');
 	assert.equal(toneSgr('code.comment', 'truecolor'), `${ESC}[3;38;2;127;132;142m`);
 	assert.equal(toneSgr('text', 'truecolor'), '');
 });

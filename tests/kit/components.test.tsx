@@ -257,3 +257,12 @@ test('Frame: a styled row keeps SGR and drops other control sequences', async ()
 	assert.ok(!raw.includes(`${ESC}]`));
 	h.unmount();
 });
+
+test('hangingRows: a styled prefix is measured without its escapes', () => {
+	const esc = String.fromCharCode(27);
+	const prefix = `${esc}[1m1.${esc}[0m `;
+	const rows = hangingRows(prefix, 'alpha beta gamma delta', 12);
+	assert.equal(rows[0]!.startsWith(prefix), true);
+	assert.equal(rows[1]!.startsWith('   alpha'.slice(0, 3)), true);
+	assert.ok(rows.every(r => stringCells(r.replace(new RegExp(`${esc}\\[[0-9;]*m`, 'g'), '')) <= 12));
+});

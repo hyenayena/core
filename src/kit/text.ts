@@ -23,6 +23,7 @@ export {
 	type RenderOptions,
 	type PreparedDiffCard,
 } from './diff-card.js';
+export {wrapCodeTokens, renderCodeFrame, type CodeFrameOptions} from './code-frame.js';
 export {formatElapsed, statusRow, ruledRows, paintTokens, type StatusRowOptions, type RuledRowsOptions} from './status-row.js';
 export type {Tone, FrameRow, PickerItem} from './types.js';
 export {

@@ -27,6 +27,11 @@ test('ASCII fallbacks are printable and as wide as the glyph', () => {
 	assert.equal(spinnerFrames('braille', {ascii: true}).length, 4);
 });
 
+test('wrap glyph', () => {
+	assert.equal(glyph('wrap'), '↪');
+	assert.equal(glyph('wrap', {ascii: true}), '>');
+});
+
 test('asciiGlyphs from the environment', () => {
 	assert.equal(asciiGlyphs({TERM: 'linux'}), true);
 	assert.equal(asciiGlyphs({TERM: 'dumb'}), true);
