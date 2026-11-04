@@ -267,3 +267,19 @@ test('fileKindGlyph by extension and name', () => {
 	assert.equal(fileKindGlyph('image.png'), 'fileOther');
 	assert.equal(fileKindGlyph('LICENSE'), 'fileOther');
 });
+
+test('header right: right-aligned and muted, dropped when the row is narrow, never past the width', () => {
+	const head = stripStyles(render(edit, 80, 'none', {lead: '✓ ✎ Edit', right: '2.1s'})[0]!);
+	assert.ok(head.endsWith('2.1s'), head);
+	assert.equal(styledCells(head), 80);
+	const tc = render(edit, 80, 'truecolor', {right: '2.1s'})[0]!;
+	assert.ok(tc.includes(`${ESC}[`));
+	for (const width of [10, 20, 30, 40]) {
+		const row = render(edit, width, 'none', {lead: '✓ ✎ Edit', right: '2.1s'})[0]!;
+		assert.ok(styledCells(row) <= width, `${width}: ${row}`);
+	}
+	const narrow = stripStyles(render(edit, 30, 'none', {lead: '✓ ✎ Edit', right: '2.1s'})[0]!);
+	assert.ok(!narrow.includes('2.1s'), narrow);
+	const hostile = stripStyles(render(edit, 80, 'none', {right: `1s${ESC}]0;x\u0007\u0001`})[0]!);
+	assert.ok(!/[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/.test(hostile));
+});

@@ -31,6 +31,7 @@ export type RenderOptions = {
 	tailRows?: number;
 	moreHint?: string;
 	lead?: string;
+	right?: string;
 };
 
 export const SIDE_BY_SIDE_MIN_WIDTH = 159;
@@ -449,10 +450,10 @@ export function renderDiffCard(card: PreparedDiffCard, options: RenderOptions): 
 	}
 
 	if (options.header === false) return rows;
-	return [headerRow(card, c, options.lead), ...rows];
+	return [headerRow(card, c, options.lead, options.right), ...rows];
 }
 
-function headerRow(card: PreparedDiffCard, c: Ctx, lead: string | undefined): string {
+function headerRow(card: PreparedDiffCard, c: Ctx, lead: string | undefined, right: string | undefined): string {
 	const {width, depth, ascii} = c;
 	const g = glyph(fileKindGlyph(card.path), {ascii});
 	const stats = `+${card.added} ${glyph('minus', {ascii})}${card.removed}`;
@@ -492,5 +493,10 @@ function headerRow(card: PreparedDiffCard, c: Ctx, lead: string | undefined): st
 	let row = `${leadPart}${tone(g, 'muted')} ${shownDir === '' ? '' : tone(shownDir, 'muted')}${SGR_ATTR.bold}${shownName}${SGR_ATTR.boldOff}`;
 	if (showStats) row += `  ${tone(`+${card.added}`, 'added')} ${tone(`${glyph('minus', {ascii})}${card.removed}`, 'removed')}`;
 	if (showBadge) row += `  ${tone(badge, 'accent')}`;
+	const rightText = right === undefined ? '' : sanitizeText(right, 40);
+	if (rightText !== '') {
+		const gap = width - styledCells(row) - stringCells(rightText);
+		if (gap >= 2) row += `${' '.repeat(gap)}${tone(rightText, 'muted')}`;
+	}
 	return styledCells(row) > width ? sliceStyledCells(row, 0, width) : row;
 }

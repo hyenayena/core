@@ -24,6 +24,14 @@ export const GLYPHS = Object.freeze({
 	fileData: {char: '≡', ascii: '='},
 	fileShell: {char: '$', ascii: '$'},
 	fileOther: {char: '▫', ascii: '-'},
+	toolRead: {char: '▤', ascii: '<'},
+	toolSearch: {char: '⌕', ascii: '?'},
+	toolEdit: {char: '✎', ascii: '*'},
+	toolShell: {char: '$', ascii: '$'},
+	toolWeb: {char: '⊕', ascii: '@'},
+	toolAgent: {char: '✦', ascii: '&'},
+	toolTask: {char: '☰', ascii: '#'},
+	toolOther: {char: '◦', ascii: '-'},
 } satisfies Record<string, GlyphDef>);
 
 export type GlyphName = keyof typeof GLYPHS;
