@@ -19,6 +19,8 @@ const main: ModuleMain = yena => {
 		...(proxy ? {stdin: proxy.stream as unknown as NodeJS.ReadStream} : {}),
 		exitOnCtrlC: false,
 		alternateScreen: true,
+		// UI-9: rewrite only changed rows; a full erase + rewrite per frame flickers in terminals without synchronized output (macOS Terminal).
+		incrementalRendering: true,
 	});
 };
 
