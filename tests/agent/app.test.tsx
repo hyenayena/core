@@ -11,6 +11,9 @@ import {loadPrefs, setPrefs} from '../../src/view/prefs.js';
 import {mountHarness} from '../testkit.js';
 import type {Command, CommandContext, MountControl} from '../../../../src/api.js';
 
+// Exact 16-colour codes below; the depth is detected once per process, on first use.
+process.env['YENA_COLOR'] = '16';
+
 const ENTER = '\r';
 
 const prefsDir = mkdtempSync(path.join(tmpdir(), 'yena-core-agent-'));

@@ -1,10 +1,12 @@
-import type {Command, CommandContext, SettingsTab} from '../../../src/api.js';
+import type {Command, CommandContext, Logger, SettingsTab} from '../../../src/api.js';
 import {collectSettingsTabs} from './view/settings-tabs.js';
 import {AGENT_MODES, getPrefs, setPrefs, TITLE_BAR_COLORS, type AgentMode, type TitleBarColor} from './view/prefs.js';
 import {buildCatalog, type Catalog} from './hints/catalog.js';
 import {helpBlocks, helpError, helpLines} from './hints/help.js';
 import {MAX_STYLED_BLOCKS, printStyled} from './kit/styled.js';
 import {helpTarget} from './hints/path.js';
+import {noopLog} from './noop-log.js';
+import {createUiCommand} from './gallery/command.js';
 
 const LABEL: Record<TitleBarColor, string> = {olive: 'Olive', blue: 'Blue', teal: 'Teal', gray: 'Gray', inverse: 'Inverse'};
 
@@ -78,7 +80,7 @@ function printHelp(catalog: Catalog, path: readonly string[], ctx: CommandContex
 	else printStyled(ctx, blocks);
 }
 
-export function createRegistry(extra: Command[]): Registry {
+export function createRegistry(extra: Command[], log: Logger = noopLog): Registry {
 	const commands: Command[] = [
 		{
 			name: 'help',
@@ -99,6 +101,7 @@ export function createRegistry(extra: Command[]): Registry {
 			agent: 'safe',
 			run: (args, ctx) => ctx.print(args.join(' ')),
 		},
+		createUiCommand(log),
 		...extra,
 		{
 			name: 'settings',

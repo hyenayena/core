@@ -626,3 +626,10 @@ test('list nests subcommands with their effective policies', () => {
 	assert.equal(p!.subcommands.find(x => x.name === 'own')!.subcommands?.[0]?.policy, 'confirm');
 	assert.equal(p!.subcommands.find(x => x.name === 'help')?.policy, 'safe');
 });
+
+test('SGR text printed by a command is stripped from the captured output', async () => {
+	const s = setup({commands: [say('paint', 'safe', `${String.fromCharCode(27)}[31mred${String.fromCharCode(27)}[0m`)]});
+	const r = await run(s, 'paint');
+	assert.equal(r.status, 'ok');
+	assert.equal(r.output, 'red');
+});

@@ -177,3 +177,10 @@ test('help <command> <subcommand> describes the subcommand; an unknown path fail
 	const {error} = await capture(() => headless(yenaWith([tree({})]), {args: ['help', 'tre']}));
 	assert.equal(error?.message, 'Unknown command: tre. Did you mean: tree?');
 });
+
+test('ui gallery prints the plain form: no escape sequences', async () => {
+	const {out, error} = await capture(() => headless(yenaWith([]), {args: ['ui', 'gallery', 'theme']}));
+	assert.equal(error, undefined);
+	assert.match(out, /Theme/);
+	assert.ok(!out.includes('\x1b'));
+});

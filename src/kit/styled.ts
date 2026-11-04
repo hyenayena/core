@@ -2,7 +2,11 @@ import type {SpanTone, StyledBlock, StyledCell, StyledSpan} from '../../../../sr
 import {sanitizeBlock, sanitizeText} from '../hints/sanitize.js';
 import {graphemes, sliceCells, stringCells} from '../hints/width.js';
 
-export const TONE_SGR: Readonly<Record<SpanTone, string>> = Object.freeze({accent: '36', muted: '2', ok: '32', warn: '33', error: '31'});
+import {SPAN_TONE_THEME, paintTone, toneParams, type ColorDepth} from './theme.js';
+
+export const TONE_SGR: Readonly<Record<SpanTone, string>> = Object.freeze(
+	Object.fromEntries((Object.keys(SPAN_TONE_THEME) as SpanTone[]).map(t => [t, toneParams(SPAN_TONE_THEME[t], '16')])) as Record<SpanTone, string>,
+);
 
 export const MAX_STYLED_BLOCKS = 1000;
 export const MAX_TABLE_ROWS = 5000;
@@ -197,11 +201,14 @@ export function plainLines(blocks: unknown): string[] {
 
 type Style = {tone?: SpanTone | undefined; bold?: boolean | undefined};
 
-function paint(text: string, style: Style, color: boolean): string {
+function paint(text: string, style: Style, depth: ColorDepth): string {
 	if (text === '') return text;
 	const codes: string[] = [];
 	if (style.bold) codes.push('1');
-	if (style.tone !== undefined && (color || style.tone === 'muted')) codes.push(TONE_SGR[style.tone]);
+	if (style.tone !== undefined) {
+		const params = toneParams(SPAN_TONE_THEME[style.tone], depth);
+		if (params !== '') codes.push(params);
+	}
 	return codes.length === 0 ? text : `${ESC}[${codes.join(';')}m${text}${RESET}`;
 }
 
@@ -229,7 +236,7 @@ function truncateSpans(spans: readonly NormalSpan[], max: number): readonly Norm
 	return out;
 }
 
-function renderTable(b: Extract<NormalBlock, {kind: 'table'}>, width: number, color: boolean): string[] {
+function renderTable(b: Extract<NormalBlock, {kind: 'table'}>, width: number, color: ColorDepth): string[] {
 	const head = b.head?.map(h => (h === '' ? [] : [{text: h, bold: true as const, tone: 'muted' as const}]));
 	const all = head ? [head, ...b.rows] : b.rows;
 	const columns = Math.max(0, ...all.map(r => r.length));
@@ -253,12 +260,13 @@ function renderTable(b: Extract<NormalBlock, {kind: 'table'}>, width: number, co
 	});
 	if (head) {
 		const across = active.reduce((n, i) => n + widths[i]!, 0) + GAP * Math.max(0, active.length - 1);
-		out.splice(1, 0, paint('─'.repeat(Math.max(1, Math.min(width, across))), {tone: 'muted'}, color));
+		out.splice(1, 0, paintTone('─'.repeat(Math.max(1, Math.min(width, across))), 'frame', color));
 	}
 	return out;
 }
 
-export function renderStyled(blocks: unknown, width: number, {color}: {color: boolean}): string {
+export function renderStyled(blocks: unknown, width: number, options: {color: boolean | ColorDepth}): string {
+	const color: ColorDepth = options.color === true ? '16' : options.color === false ? 'none' : options.color;
 	const w = Number.isFinite(width) && width >= 1 ? Math.floor(width) : 1;
 	const out: string[] = [];
 	for (const b of normalizeStyled(blocks)) {
@@ -267,7 +275,7 @@ export function renderStyled(blocks: unknown, width: number, {color}: {color: bo
 				out.push(trimEnd(b.spans.map(s => paint(s.text, s, color)).join('')));
 				break;
 			case 'rule':
-				out.push(paint('─'.repeat(w), {tone: 'muted'}, color));
+				out.push(paintTone('─'.repeat(w), 'frame', color));
 				break;
 			case 'table':
 				out.push(...renderTable(b, w, color));

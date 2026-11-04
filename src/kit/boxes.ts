@@ -1,6 +1,6 @@
 import {sanitizeBlock} from '../hints/sanitize.js';
 import {stringCells, sliceCells, truncateCells} from '../hints/width.js';
-import {TONE_STYLE, type Tone} from './types.js';
+import {TONE_THEME, type Tone} from './types.js';
 
 export type Span = {text: string; tone?: Tone; bold?: boolean; inverse?: boolean};
 
@@ -34,7 +34,7 @@ const MIN_BOX_HEIGHT = 3;
 const MIN_TITLE_CELLS = 8;
 const ELLIPSIS = '…';
 
-const isTone = (t: unknown): t is Tone => typeof t === 'string' && Object.hasOwn(TONE_STYLE, t);
+const isTone = (t: unknown): t is Tone => typeof t === 'string' && Object.hasOwn(TONE_THEME, t);
 
 const whole = (n: number, min: number): number => (Number.isFinite(n) ? Math.max(min, Math.floor(n)) : min);
 

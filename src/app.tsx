@@ -26,7 +26,8 @@ import {errorLines} from './error-lines.js';
 import {parseLine} from './parse-line.js';
 import {createCommandBridge, type AgentViewHandle} from './agent/bridge.js';
 import {unknownCommandLines} from './hints/typo.js';
-import {c, colorEnabled} from './hints/style.js';
+import {c} from './hints/style.js';
+import {colorDepth} from './kit/theme.js';
 import {normalizeStyled, plainLines, renderStyled} from './kit/styled.js';
 import {focusMove, isConsoleToggle, isHostKey, isQuitLine} from './view/keys.js';
 import type {ViewCommandHost, ViewCommandInfo} from './view/view-commands.js';
@@ -467,7 +468,7 @@ export default function App({
 		const styled = normalizeStyled(blocks);
 		const plain = plainLines(styled);
 		if (plain.length === 0) return;
-		printMain(plain.join('\n'), undefined, {render: w => renderStyled(styled, w, {color: colorEnabled()})});
+		printMain(plain.join('\n'), undefined, {render: w => renderStyled(styled, w, {color: colorDepth()})});
 	};
 	const scrollBy = (delta: number) => {
 		const viewport = anchoredViewport();
@@ -488,8 +489,9 @@ export default function App({
 	);
 	const panelRowsRef = useRef(panelRows);
 	panelRowsRef.current = panelRows;
-	const printPanel = (text: string, color?: string) => {
-		const added = text.split(/\r?\n/).map(part => ({id: nextId++, text: part, color}));
+	const printPanel = (text: string, color?: string, options?: PrintOptions) => {
+		const render = typeof options?.render === 'function' ? options.render : undefined;
+		const added = render ? [{id: nextId++, text, color, render}] : text.split(/\r?\n/).map(part => ({id: nextId++, text: part, color}));
 		setPanelLines(prev => [...prev, ...added].slice(-MAX_PANEL_LINES));
 		if (panelScrollRef.current > 0) {
 			const width = Math.max(1, live.current.panelInner - 1);
@@ -500,7 +502,7 @@ export default function App({
 	const printPanelStyled = (blocks: unknown) => {
 		const styled = normalizeStyled(blocks);
 		if (plainLines(styled).length === 0) return;
-		printPanel(renderStyled(styled, Math.max(1, live.current.panelInner - 1), {color: colorEnabled()}));
+		printPanel(renderStyled(styled, Math.max(1, live.current.panelInner - 1), {color: colorDepth()}));
 	};
 	const panelScrollBy = (delta: number) =>
 		setPanelScroll(s =>
@@ -508,7 +510,7 @@ export default function App({
 		);
 	const sideRef = useRef(side);
 	sideRef.current = side;
-	const printConsole = (text: string, color?: string) => (sideRef.current ? printPanel : printMain)(text, color);
+	const printConsole = (text: string, color?: string, options?: PrintOptions) => (sideRef.current ? printPanel : printMain)(text, color, options);
 	const printConsoleStyled = (blocks: unknown) => (sideRef.current ? printPanelStyled : printMainStyled)(blocks);
 
 	const mountActivity = (
@@ -616,11 +618,11 @@ export default function App({
 	});
 	const commandBridge = bridgeRef.current;
 
-	const makeCtx = (print: (text: string, color?: string) => void, styled: (blocks: readonly StyledBlock[]) => void): CommandContext => {
+	const makeCtx = (print: (text: string, color?: string, options?: PrintOptions) => void, styled: (blocks: readonly StyledBlock[]) => void): CommandContext => {
 		let ownsMain = false;
-		const out = (text: string, color?: string) => (ownsMain ? printMain : print)(text, color);
+		const out = (text: string, color?: string, options?: PrintOptions) => (ownsMain ? printMain : print)(text, color, options);
 		return {
-			print: text => out(text),
+			print: (text, options) => out(text, undefined, options),
 			printStyled: blocks => (ownsMain ? printMainStyled : styled)(blocks),
 			clear: clearAll,
 			exit,
@@ -640,7 +642,7 @@ export default function App({
 		command: Command,
 		name: string,
 		args: string[],
-		print: (text: string, color?: string) => void,
+		print: (text: string, color?: string, options?: PrintOptions) => void,
 		styled: (blocks: readonly StyledBlock[]) => void,
 	) => {
 		try {

@@ -663,3 +663,34 @@ test('the full-screen console wraps its scrollback short of the last terminal co
 	assert.ok(widestRow(frame) <= 79, `a row reaches the last column: ${widestRow(frame)}`);
 	h.unmount();
 });
+
+const longestRun = (frame: string, ch: string): number => Math.max(0, ...(frame.match(new RegExp(`${ch}+`, 'g')) ?? []).map(m => m.length));
+
+test('a print with render is laid out at the console panel width and again after a resize', async () => {
+	const fill: Command = {name: 'fill', description: 'fill', run: (_a, ctx) => ctx.print('fallback', {render: w => 'q'.repeat(w)})};
+	const {h, type} = setup([fill], {columns: 100, rows: 30});
+	await h.settle(60);
+	await type('\x14');
+	await type('fill');
+	await type(ENTER);
+	const wide = longestRun(h.lastFrame(), 'q');
+	assert.ok(wide > 10 && wide <= 99, `width ${wide}`);
+	assert.doesNotMatch(h.lastFrame(), /fallback/);
+	h.resize(70, 30);
+	await h.settle(120);
+	const narrow = longestRun(h.lastFrame(), 'q');
+	assert.ok(narrow > 5 && narrow < wide, `${narrow} < ${wide}`);
+	h.unmount();
+});
+
+test('a print with render is laid out at the main screen width', async () => {
+	const fill: Command = {name: 'fill', description: 'fill', run: (_a, ctx) => ctx.print('fallback', {render: w => 'q'.repeat(w)})};
+	const h = mountHarness(<App registry={createRegistry([fill])} />, {columns: 80, rows: 20});
+	await h.settle(60);
+	h.press('fill');
+	await h.settle(80);
+	h.press(ENTER);
+	await h.settle(120);
+	assert.equal(longestRun(h.lastFrame(), 'q'), 79);
+	h.unmount();
+});

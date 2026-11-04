@@ -14,7 +14,7 @@ import {isQuitLine} from './view/keys.js';
 const fail = (message: string): Error => Object.assign(new Error(message), {exitCode: 2});
 
 const headless: HeadlessMain = async (yena, request) => {
-	const registry = createRegistry(yena.commands);
+	const registry = createRegistry(yena.commands, yena.log);
 	const catalog = () => buildCatalog(registry.commands);
 	if (request.catalog) {
 		const lines = completionLines(catalog());

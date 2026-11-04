@@ -32,7 +32,7 @@ test('first duplicate wins, matching registry.find', () => {
 	const cat = buildCatalog(reg.commands);
 	assert.equal(cat.byName.get('clear')?.description, reg.find('clear')?.description);
 	assert.equal(cat.commands.filter(c => c.name === 'clear').length, 1);
-	assert.deepEqual(cat.commands.map(c => c.name).slice(0, 3), ['help', 'echo', 'clear']);
+	assert.deepEqual(cat.commands.map(c => c.name).slice(0, 4), ['help', 'echo', 'ui', 'clear']);
 });
 
 test('a throwing getter drops only that command', () => {

@@ -1,5 +1,6 @@
 import {mkdirSync, readFileSync, writeFileSync} from 'node:fs';
 import path from 'node:path';
+import {setColorsEnabled} from '../kit/theme.js';
 
 export const TITLE_BAR_COLORS = ['olive', 'blue', 'teal', 'gray', 'inverse'] as const;
 export type TitleBarColor = (typeof TITLE_BAR_COLORS)[number];
@@ -33,6 +34,7 @@ export function loadPrefs(dataDir: string): CorePrefs {
 	} catch {
 		prefs = {...DEFAULT_PREFS};
 	}
+	setColorsEnabled(prefs.colors);
 	return prefs;
 }
 
@@ -40,6 +42,7 @@ export const getPrefs = (): CorePrefs => prefs;
 
 export function setPrefs(patch: Partial<CorePrefs>): void {
 	prefs = clean({...prefs, ...patch});
+	setColorsEnabled(prefs.colors);
 	if (file) {
 		mkdirSync(path.dirname(file), {recursive: true});
 		writeFileSync(file, JSON.stringify(prefs, null, '\t') + '\n');

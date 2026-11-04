@@ -1,6 +1,6 @@
 export {graphemes, cellWidth, stringCells, truncateCells, sliceCells} from '../hints/width.js';
 export {sanitizeText, sanitizeBlock, sanitizeMultilineInput} from '../hints/sanitize.js';
-export {wrapRows, wrapLines, styledCells} from '../transcript/wrap.js';
+export {wrapRows, wrapLines, styledCells, sliceStyledCells, stripStyles} from '../transcript/wrap.js';
 export {tailRows, type TailRows} from './tail.js';
 export {windowLine, indexAtCell, type Windowed} from '../hints/viewport.js';
 export {windowStart} from './window.js';
@@ -54,3 +54,36 @@ export {
 	type NormalBlock,
 	type NormalStyled,
 } from './styled.js';
+export {
+	COLOR_DEPTHS,
+	THEME_TONES,
+	DARK_THEME,
+	SPAN_TONE_THEME,
+	SGR_ATTR,
+	SGR_RESET,
+	activeTheme,
+	detectColorDepth,
+	colorDepth,
+	withColorDepth,
+	sgrTable,
+	toneSgr,
+	toneParams,
+	paintTone,
+	inkTone,
+	type ColorDepth,
+	type ThemeTone,
+	type Theme,
+	type ToneDef,
+	type Attrs,
+	type Hex,
+	type Ansi16,
+	type InkToneProps,
+} from './theme.js';
+export {GLYPHS, SPINNER_GLYPHS, glyph, spinnerFrames, asciiGlyphs, type GlyphDef, type GlyphName, type SpinnerGlyphName} from './glyphs.js';
+export {
+	registerGallerySection,
+	gallerySections,
+	type GallerySection,
+	type GalleryRenderer,
+	type GalleryRenderOptions,
+} from './gallery.js';

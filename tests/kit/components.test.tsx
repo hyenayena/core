@@ -4,6 +4,7 @@ import {test} from 'node:test';
 import {Text} from 'ink';
 import {BrailleBar, Frame, LabeledInput, labeledInputRows, ListPicker, SpanRows, Spinner, SPINNERS, StatusBar, useSpinnerFrame} from '../../src/kit/ui.js';
 import {hangingRows, stringCells} from '../../src/kit/text.js';
+import {resetColorDepthCacheForTests} from '../../src/kit/theme.js';
 import {mountHarness, wait} from '../testkit.js';
 
 const ESC = String.fromCharCode(27);
@@ -225,10 +226,14 @@ test('SpanRows: one row per entry, sanitised spans, NO_COLOR drops colours but k
 		return lines.flatMap(line => ([] as El[]).concat(line.props.children ?? []).filter(c => typeof c === 'object')).map(c => c.props);
 	};
 	const prev = process.env['NO_COLOR'];
+	const prevDepth = process.env['YENA_COLOR'];
 	try {
 		delete process.env['NO_COLOR'];
+		process.env['YENA_COLOR'] = '16';
+		resetColorDepthCacheForTests();
 		assert.ok(spanProps().some(p => p.color === 'cyan'));
 		process.env['NO_COLOR'] = '1';
+		resetColorDepthCacheForTests();
 		const props = spanProps();
 		assert.ok(props.every(p => p.color === undefined));
 		assert.ok(props.some(p => p.bold === true && p.inverse === true));
@@ -236,5 +241,8 @@ test('SpanRows: one row per entry, sanitised spans, NO_COLOR drops colours but k
 	} finally {
 		if (prev === undefined) delete process.env['NO_COLOR'];
 		else process.env['NO_COLOR'] = prev;
+		if (prevDepth === undefined) delete process.env['YENA_COLOR'];
+		else process.env['YENA_COLOR'] = prevDepth;
+		resetColorDepthCacheForTests();
 	}
 });

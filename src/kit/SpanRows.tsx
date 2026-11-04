@@ -1,13 +1,13 @@
 import React from 'react';
 import {Text} from 'ink';
-import {colorEnabled} from '../hints/style.js';
 import {cleanRow, type SpanRow} from './boxes.js';
-import {TONE_STYLE} from './types.js';
+import {TONE_THEME} from './types.js';
+import {colorDepth, inkTone} from './theme.js';
 
 export type SpanRowsProps = {rows: readonly SpanRow[]};
 
 export function SpanRows({rows}: SpanRowsProps) {
-	const colors = colorEnabled();
+	const depth = colorDepth();
 	return (
 		<>
 			{rows.map((row, i) => {
@@ -17,15 +17,10 @@ export function SpanRows({rows}: SpanRowsProps) {
 						{spans.length === 0
 							? ' '
 							: spans.map((s, j) => {
-									const style = TONE_STYLE[s.tone ?? 'plain'];
+									const theme = TONE_THEME[s.tone ?? 'plain'];
+									const style = theme === null ? {} : inkTone(theme, depth);
 									return (
-										<Text
-											key={j}
-											color={colors ? style.color : undefined}
-											dimColor={style.dim === true}
-											bold={s.bold === true}
-											inverse={s.inverse === true}
-										>
+										<Text key={j} {...style} bold={style.bold === true || s.bold === true} inverse={style.inverse === true || s.inverse === true}>
 											{s.text}
 										</Text>
 									);
