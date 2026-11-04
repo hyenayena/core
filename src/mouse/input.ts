@@ -16,6 +16,8 @@ type TimerHandle = {unref?: () => unknown};
 export type ProxyTimers = {
 	setTimeout(fn: () => void, ms: number): TimerHandle;
 	clearTimeout(handle: TimerHandle): void;
+	setImmediate?(fn: () => void): TimerHandle;
+	clearImmediate?(handle: TimerHandle): void;
 };
 
 export type ProxyStream = Readable & {
@@ -32,8 +34,10 @@ export type InputProxy = {
 	setEnabled(on: boolean): void;
 };
 
-const SHORT_HOLD_MS = 10;
-const LONG_HOLD_MS = 50;
+// A lone ESC or a split report released too early reaches the chat as an Esc key press and interrupts
+// the running turn (TASK-30); docker exec and a busy event loop easily delay the rest of a sequence.
+const SHORT_HOLD_MS = 50;
+const LONG_HOLD_MS = 100;
 
 const defaultSize = () => ({columns: process.stdout.columns ?? 0, rows: process.stdout.rows ?? 0});
 
@@ -44,6 +48,8 @@ export function createInputProxy(
 	const timers: ProxyTimers = options.timers ?? {
 		setTimeout: (fn, ms) => setTimeout(fn, ms),
 		clearTimeout: handle => clearTimeout(handle as ReturnType<typeof setTimeout>),
+		setImmediate: fn => setImmediate(fn),
+		clearImmediate: handle => clearImmediate(handle as ReturnType<typeof setImmediate>),
 	};
 	const size = options.size ?? defaultSize;
 	const tokenizer = createMouseTokenizer();
@@ -51,11 +57,16 @@ export function createInputProxy(
 	let enabled = false;
 	let attached = false;
 	let timer: TimerHandle | undefined;
+	let deferred: TimerHandle | undefined;
 
 	const readable = new Readable({read() {}, encoding: 'utf8'});
 	const stream = readable as ProxyStream;
 
 	const cancelTimer = () => {
+		if (deferred !== undefined) {
+			timers.clearImmediate?.(deferred);
+			deferred = undefined;
+		}
 		if (timer === undefined) return;
 		timers.clearTimeout(timer);
 		timer = undefined;
@@ -63,12 +74,21 @@ export function createInputProxy(
 
 	const release = () => {
 		timer = undefined;
+		deferred = undefined;
 		const text = tokenizer.flush();
 		if (text) stream.push(text);
 	};
 
+	// Timers run before the poll phase reads stdin, so after a stalled loop the rest of the sequence may
+	// already be waiting: release only after one more turn of the loop has had the chance to read it.
+	const expire = () => {
+		timer = undefined;
+		if (!timers.setImmediate) return release();
+		deferred = timers.setImmediate(release);
+	};
+
 	const schedule = (ms: number) => {
-		timer = timers.setTimeout(release, ms);
+		timer = timers.setTimeout(expire, ms);
 		timer.unref?.();
 	};
 

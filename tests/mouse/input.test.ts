@@ -80,11 +80,11 @@ test('with mouse on reports are dispatched as events and removed from the text',
 	]);
 });
 
-test('a held ESC is released after 10 ms, a following chunk cancels the hold', async () => {
+test('a held ESC is released after 50 ms, a following chunk cancels the hold', async () => {
 	const s = setup(true);
 	await s.send(`a${ESC}`);
 	assert.equal(await s.text(), 'a');
-	s.clock.advance(9);
+	s.clock.advance(49);
 	assert.equal(await s.text(), 'a');
 	s.clock.advance(1);
 	assert.equal(await s.text(), `a${ESC}`);
@@ -95,15 +95,15 @@ test('a held ESC is released after 10 ms, a following chunk cancels the hold', a
 	assert.equal(s.clock.pending(), 0);
 });
 
-test('a split report is joined during the hold and dropped after 50 ms', async () => {
+test('a split report is joined during the hold and dropped after 100 ms', async () => {
 	const s = setup(true);
 	await s.send(`${ESC}[<0;5`);
-	s.clock.advance(49);
+	s.clock.advance(99);
 	await s.send(';6M');
 	assert.equal(s.events.length, 1);
 	assert.equal(await s.text(), '');
 	await s.send(`${ESC}[<0;5`);
-	s.clock.advance(50);
+	s.clock.advance(100);
 	assert.equal(s.clock.pending(), 0);
 	await s.send(';6Mz');
 	assert.equal(await s.text(), ';6Mz');
@@ -201,7 +201,7 @@ test('a throwing size callback drops the events but keeps the text', async () =>
 	assert.equal(events.length, 0);
 });
 
-test('a trailing ESC[ is held 50 ms while mouse is on, so a slow split report is still joined', async () => {
+test('a trailing ESC[ is held 100 ms while mouse is on, so a slow split report is still joined', async () => {
 	const s = setup(true);
 	await s.send(`a${ESC}[`);
 	s.clock.advance(20);
@@ -210,10 +210,51 @@ test('a trailing ESC[ is held 50 ms while mouse is on, so a slow split report is
 	assert.equal(await s.text(), 'a');
 	assert.deepEqual(s.events.map(e => [e.x, e.y]), [[3, 4]]);
 	await s.send(`${ESC}[`);
-	s.clock.advance(49);
+	s.clock.advance(99);
 	assert.equal(await s.text(), 'a');
 	s.clock.advance(1);
 	assert.equal(await s.text(), `a${ESC}[`);
+});
+
+test('an expired hold waits one more loop turn, so the rest of a report read after a stalled loop is still joined', async () => {
+	const tty = createFakeTty();
+	const clock = fakeTimers();
+	const immediates: Array<() => void> = [];
+	const timers: ProxyTimers = {
+		...clock.timers,
+		setImmediate(fn) {
+			immediates.push(fn);
+			return {};
+		},
+		clearImmediate() {
+			immediates.length = 0;
+		},
+	};
+	const proxy = createInputProxy(tty, {timers, size: () => ({columns: 80, rows: 24})});
+	proxy.setEnabled(true);
+	const received: string[] = [];
+	proxy.stream.on('readable', () => {
+		let chunk: string | null;
+		while ((chunk = proxy.stream.read() as string | null) !== null) received.push(chunk);
+	});
+	const events: MouseInputEvent[] = [];
+	proxy.onMouse(e => events.push(e));
+	const tick = () => new Promise(resolve => setImmediate(resolve));
+	tty.write(ESC);
+	await tick();
+	clock.advance(50);
+	assert.equal(immediates.length, 1);
+	tty.write('[<64;3;4M');
+	await tick();
+	assert.equal(immediates.length, 0);
+	assert.equal(received.join(''), '');
+	assert.deepEqual(events.map(e => e.kind), ['wheel']);
+	tty.write(ESC);
+	await tick();
+	clock.advance(50);
+	immediates.shift()!();
+	await tick();
+	assert.equal(received.join(''), ESC);
 });
 
 test('a malformed report never reaches the text, also when split', async () => {
