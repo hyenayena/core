@@ -118,3 +118,10 @@ test('SPAN_TONE_THEME and TONE_THEME point at real tones', () => {
 	assert.equal(COLOR_DEPTHS.length, 4);
 	assert.equal(sgrTable('16'), sgrTable('16'));
 });
+
+test('running tone', () => {
+	assert.equal(toneSgr('running', 'truecolor'), `${ESC}[38;2;215;119;87m`);
+	assert.equal(toneSgr('running', '256'), `${ESC}[38;5;173m`);
+	assert.equal(toneSgr('running', '16'), `${ESC}[33m`);
+	assert.equal(toneSgr('running', 'none'), '');
+});

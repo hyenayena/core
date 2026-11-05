@@ -42,3 +42,10 @@ test('asciiGlyphs from the environment', () => {
 	assert.equal(asciiGlyphs({LC_ALL: 'POSIX', LANG: 'en_US.UTF-8'}), true);
 	assert.equal(asciiGlyphs({LC_ALL: 'en_US.utf8'}), false);
 });
+
+test('meter and branch glyphs', () => {
+	assert.equal(glyph('meterOn'), '▰');
+	assert.equal(glyph('meterOff', {ascii: true}), '-');
+	assert.equal(glyph('branch'), '⎇');
+	assert.equal(glyph('branch', {ascii: true}), '@');
+});

@@ -33,6 +33,9 @@ export const GLYPHS = Object.freeze({
 	toolTask: {char: '☰', ascii: '#'},
 	toolOther: {char: '◦', ascii: '-'},
 	wrap: {char: '↪', ascii: '>'},
+	meterOn: {char: '▰', ascii: '#'},
+	meterOff: {char: '▱', ascii: '-'},
+	branch: {char: '⎇', ascii: '@'},
 } satisfies Record<string, GlyphDef>);
 
 export type GlyphName = keyof typeof GLYPHS;
