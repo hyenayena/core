@@ -26,6 +26,7 @@ export {
 export {wrapCodeTokens, renderCodeFrame, type CodeFrameOptions} from './code-frame.js';
 export {formatElapsed, statusRow, ruledRows, paintTokens, type StatusRowOptions, type RuledRowsOptions} from './status-row.js';
 export {segmentBar, meterBar, type BarSegment, type SegmentBarOptions, type MeterBarOptions} from './segment-bar.js';
+export {checklistRows, type ChecklistItem, type ChecklistOptions} from './checklist.js';
 export type {Tone, FrameRow, PickerItem} from './types.js';
 export {
 	gridLayout,

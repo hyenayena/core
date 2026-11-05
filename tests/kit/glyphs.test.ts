@@ -49,3 +49,8 @@ test('meter and branch glyphs', () => {
 	assert.equal(glyph('branch'), '⎇');
 	assert.equal(glyph('branch', {ascii: true}), '@');
 });
+
+test('todo glyph', () => {
+	assert.equal(glyph('todo'), '○');
+	assert.equal(glyph('todo', {ascii: true}), 'o');
+});

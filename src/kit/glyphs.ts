@@ -31,6 +31,7 @@ export const GLYPHS = Object.freeze({
 	toolWeb: {char: '⊕', ascii: '@'},
 	toolAgent: {char: '✦', ascii: '&'},
 	toolTask: {char: '☰', ascii: '#'},
+	todo: {char: '○', ascii: 'o'},
 	toolOther: {char: '◦', ascii: '-'},
 	wrap: {char: '↪', ascii: '>'},
 	meterOn: {char: '▰', ascii: '#'},
