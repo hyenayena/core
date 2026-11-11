@@ -1,13 +1,15 @@
-import React, {useEffect, useMemo, useRef, useState, type ReactNode} from 'react';
+import React, {useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode} from 'react';
 import {Box, Text, measureElement, useApp, useInput, useStdin, useStdout, useWindowSize, type DOMElement} from 'ink';
 import Prompt from './components/Prompt.js';
 import MountBoundary from './components/MountBoundary.js';
 import TitleBar from './components/TitleBar.js';
+import ConsolePanel from './components/ConsolePanel.js';
 import Transcript, {scrollHint} from './components/Transcript.js';
 import type {
 	Command,
 	CommandBridge,
 	CommandContext,
+	EventBus,
 	FocusDirection,
 	Logger,
 	MountControl,
@@ -26,10 +28,21 @@ import {errorLines} from './error-lines.js';
 import {LineError, parseLine} from './parse-line.js';
 import {createCommandBridge, type AgentViewHandle} from './agent/bridge.js';
 import {unknownCommandLines} from './hints/typo.js';
-import {c} from './hints/style.js';
-import {colorDepth} from './kit/theme.js';
+import {asciiGlyphs, glyph, spinnerFrames} from './kit/glyphs.js';
+import {useSpinnerFrame} from './kit/Spinner.js';
+import {
+	ACTIVITY_TOPIC,
+	EMPTY_ACTIVITY,
+	activityRow,
+	applyActivity,
+	nextActivityChange,
+	readActivity,
+	visibleActivity,
+} from './kit/activity.js';
+import {colorDepth, type ThemeTone} from './kit/theme.js';
+import {appendEntries, beginSection, endSection, hasFolds, sectionRows, toggleFold, type PanelEntry, type PanelRow, type PanelSection } from './panel/sections.js';
 import {normalizeStyled, plainLines, renderStyled} from './kit/styled.js';
-import {focusMove, isConsoleToggle, isHostKey, isQuitLine} from './view/keys.js';
+import {focusMove, isConsoleToggle, isFoldToggle, isHostKey, isQuitLine} from './view/keys.js';
 import type {ViewCommandHost, ViewCommandInfo} from './view/view-commands.js';
 import {ViewLayoutContext} from './view/use-view-host.js';
 import {copyToClipboard} from './view/clipboard.js';
@@ -54,7 +67,7 @@ import {
 	type Span,
 } from './transcript/selection.js';
 
-type Line = {id: number; text: string; color?: string; welcome?: boolean; alert?: boolean};
+type Line = {id: number; text: string; tone?: ThemeTone; welcome?: boolean; alert?: boolean};
 
 type Pending = {id: number; resolve: () => void; reject: (error: Error) => void};
 
@@ -73,7 +86,9 @@ export type AppMouse = {
 	resume(): void;
 };
 
-const MAX_PANEL_LINES = 500;
+const ACTIVITY_FLUSH_MS = 100;
+const ACTIVITY_SPIN_MS = 120;
+const MAX_TIMER_MS = 2 ** 31 - 1;
 export const MAX_LINES = 5000;
 const TITLE_MAX = 200;
 const SPLIT_MIN_COLUMNS = 60;
@@ -85,7 +100,6 @@ export const AUTO_PANEL_GRACE_MS = 3000;
 
 export const WELCOME = 'yena — type "help" for the list of commands';
 export const WELCOME_WITH_VIEW = 'press Tab (or Ctrl+T) to open the console';
-export const PANEL_TITLE = 'Console · Tab close · ⇧← chat';
 
 export type PanelGeometry = {split: boolean; panelColumns: number; mainColumns: number; panelRows: number};
 
@@ -124,15 +138,15 @@ let nextId = 0;
 const MAX_ALERTS = 5;
 const ALERT_CHARS = 300;
 
-export function alertLines(alerts: unknown): {text: string; color?: string}[] {
+export function alertLines(alerts: unknown): {text: string; tone?: ThemeTone}[] {
 	if (!Array.isArray(alerts)) return [];
-	const lines: {text: string; color?: string}[] = [];
+	const lines: {text: string; tone?: ThemeTone}[] = [];
 	for (const alert of alerts.slice(0, MAX_ALERTS) as {text?: unknown; detail?: unknown}[]) {
 		const text = sanitizeText(alert?.text, ALERT_CHARS);
 		if (!text) continue;
-		lines.push({text: `! ${text}`, color: c('yellow')});
+		lines.push({text: `! ${text}`, tone: 'warn'});
 		const detail = sanitizeText(alert?.detail, ALERT_CHARS);
-		if (detail) lines.push({text: `  ${detail}`, color: c('gray')});
+		if (detail) lines.push({text: `  ${detail}`, tone: 'muted'});
 	}
 	return lines;
 }
@@ -144,12 +158,14 @@ export default function App({
 	mouse,
 	graceMs = AUTO_PANEL_GRACE_MS,
 	alerts,
+	events,
 }: {
 	registry: Registry;
 	log?: Logger;
 	mouse?: AppMouse;
 	graceMs?: number;
 	alerts?: unknown;
+	events?: EventBus;
 }) {
 	const {exit} = useApp();
 	const {stdout} = useStdout();
@@ -167,13 +183,16 @@ export default function App({
 		{
 			id: nextId++,
 			...(autostartCommands(registry.commands).length > 0
-				? {text: WELCOME_WITH_VIEW, color: c('gray')}
-				: {text: WELCOME, color: c('green')}),
+				? {text: WELCOME_WITH_VIEW, tone: 'muted' as const}
+				: {text: WELCOME, tone: 'ok' as const}),
 			welcome: true,
 		},
 		...alertLines(alerts).map(l => ({id: nextId++, ...l, alert: true})),
 	]);
-	const [panelLines, setPanelLines] = useState<Line[]>([]);
+	const [sections, setSections] = useState<PanelSection[]>([]);
+	const [expandAll, setExpandAll] = useState(false);
+	const expandAllRef = useRef(expandAll);
+	expandAllRef.current = expandAll;
 	const [catalogTick, setCatalogTick] = useState(0);
 	const refreshCatalog = () => setCatalogTick(n => n + 1);
 	const catalog = useMemo(() => buildCatalog(registry.commands), [registry, catalogTick]);
@@ -197,8 +216,16 @@ export default function App({
 		if (active === 'panel') refreshCatalog();
 	}, [active]);
 
+	const feedRef = useRef(EMPTY_ACTIVITY);
+	const [, setActivityTick] = useState(0);
+	const activityItems = visibleActivity(feedRef.current, Date.now());
+	const activityShown = side && panelOpen && panelView === null && activityItems.length > 0;
+	const useAscii = asciiGlyphs(process.env);
+	const spinFrames = spinnerFrames('braille', {ascii: useAscii});
+	const spinGlyph = useSpinnerFrame(spinFrames, ACTIVITY_SPIN_MS, panelOpen && activityItems.some(i => i.state === 'running'));
+
 	const panelViewRows = side ? Math.max(1, geo.panelRows - 1) : Math.max(1, rows - 1);
-	const panelOutputRows = Math.max(0, geo.panelRows - 4);
+	const panelOutputRows = Math.max(0, geo.panelRows - 4 - (activityShown ? 1 : 0));
 	const snapshot = {
 		columns,
 		active,
@@ -246,6 +273,40 @@ export default function App({
 		},
 		[],
 	);
+
+	useEffect(() => {
+		if (!events) return;
+		let flush: ReturnType<typeof setTimeout> | null = null;
+		let expiry: ReturnType<typeof setTimeout> | null = null;
+		const schedule = () => {
+			if (expiry) clearTimeout(expiry);
+			expiry = null;
+			const wait = nextActivityChange(feedRef.current, Date.now());
+			if (wait === undefined) return;
+			expiry = setTimeout(() => {
+				expiry = null;
+				feedRef.current = {items: visibleActivity(feedRef.current, Date.now())};
+				if (alive.current) setActivityTick(n => n + 1);
+				schedule();
+			}, Math.min(MAX_TIMER_MS, wait + 1));
+		};
+		const off = events.on(ACTIVITY_TOPIC, payload => {
+			const report = readActivity(payload);
+			if (!report) return;
+			feedRef.current = applyActivity(feedRef.current, report, Date.now());
+			if (flush) return;
+			flush = setTimeout(() => {
+				flush = null;
+				if (alive.current) setActivityTick(n => n + 1);
+				schedule();
+			}, ACTIVITY_FLUSH_MS);
+		});
+		return () => {
+			off();
+			if (flush) clearTimeout(flush);
+			if (expiry) clearTimeout(expiry);
+		};
+	}, [events]);
 
 	const startOwner = () => {
 		owners.current++;
@@ -456,10 +517,10 @@ export default function App({
 	const hintShown = useRef(false);
 	const anchoredViewport = () => Math.max(1, viewportHeight() - (hintShown.current ? 0 : 1));
 	const welcomeBelowNext = useRef(false);
-	const printMain = (text: string, color?: string, options?: PrintOptions) => {
+	const printMain = (text: string, tone?: ThemeTone, options?: PrintOptions) => {
 		const actions = cleanActions(options?.actions);
 		const render = typeof options?.render === 'function' ? options.render : undefined;
-		const line = {id: nextId++, text, color, ...(actions && {actions}), ...(render && {render})};
+		const line = {id: nextId++, text, tone, ...(actions && {actions}), ...(render && {render})};
 		if (!welcomeBelowNext.current) {
 			setLines(prev => [...prev, line].slice(-MAX_LINES));
 			return;
@@ -490,25 +551,28 @@ export default function App({
 	const panelRowCache = useRef(createRowCache()).current;
 	const panelWidth = Math.max(1, panelInner - 1);
 	const panelRows = useMemo(
-		() => panelLines.flatMap(line => panelRowCache(line, panelWidth).map((text, row) => ({key: `${line.id}:${row}`, text, color: line.color}))),
-		[panelLines, panelWidth],
+		() => sectionRows(sections, panelRowCache, {width: panelWidth, expandAll, ascii: useAscii}),
+		[sections, panelWidth, expandAll, useAscii],
 	);
 	const panelRowsRef = useRef(panelRows);
 	panelRowsRef.current = panelRows;
-	const printPanel = (text: string, color?: string, options?: PrintOptions) => {
+	const rowsSeen = useRef({count: 0, sections});
+	useLayoutEffect(() => {
+		const grew = panelRows.length - rowsSeen.current.count;
+		const changed = rowsSeen.current.sections !== sections;
+		rowsSeen.current = {count: panelRows.length, sections};
+		if (changed && grew > 0 && panelScrollRef.current > 0) setPanelScroll(s => s + grew);
+	});
+	const printPanel = (text: string, tone?: ThemeTone, options?: PrintOptions, sectionId?: number) => {
 		const render = typeof options?.render === 'function' ? options.render : undefined;
-		const added = render ? [{id: nextId++, text, color, render}] : text.split(/\r?\n/).map(part => ({id: nextId++, text: part, color}));
-		setPanelLines(prev => [...prev, ...added].slice(-MAX_PANEL_LINES));
-		if (panelScrollRef.current > 0) {
-			const width = Math.max(1, live.current.panelInner - 1);
-			const rows = added.reduce((n, line) => n + panelRowCache(line, width).length, 0);
-			setPanelScroll(s => s + rows);
-		}
+		const added: PanelEntry[] = render ? [{id: nextId++, text, tone, render}] : text.split(/\r?\n/).map(part => ({id: nextId++, text: part, tone}));
+		setSections(prev => appendEntries(prev, sectionId, added, Date.now()));
 	};
-	const printPanelStyled = (blocks: unknown) => {
+	const printPanelStyled = (blocks: unknown, sectionId?: number) => {
 		const styled = normalizeStyled(blocks);
-		if (plainLines(styled).length === 0) return;
-		printPanel(renderStyled(styled, Math.max(1, live.current.panelInner - 1), {color: colorDepth()}));
+		const plain = plainLines(styled);
+		if (plain.length === 0) return;
+		printPanel(plain.join('\n'), undefined, {render: w => renderStyled(styled, w, {color: colorDepth()})}, sectionId);
 	};
 	const panelScrollBy = (delta: number) =>
 		setPanelScroll(s =>
@@ -516,8 +580,19 @@ export default function App({
 		);
 	const sideRef = useRef(side);
 	sideRef.current = side;
-	const printConsole = (text: string, color?: string, options?: PrintOptions) => (sideRef.current ? printPanel : printMain)(text, color, options);
-	const printConsoleStyled = (blocks: unknown) => (sideRef.current ? printPanelStyled : printMainStyled)(blocks);
+	const printConsole = (text: string, tone?: ThemeTone, options?: PrintOptions, sectionId?: number) =>
+		sideRef.current ? printPanel(text, tone, options, sectionId) : printMain(text, tone, options);
+	const printConsoleStyled = (blocks: unknown, sectionId?: number) => (sideRef.current ? printPanelStyled(blocks, sectionId) : printMainStyled(blocks));
+	const openBridgeSection: NonNullable<Parameters<typeof createCommandBridge>[0]['section']> = start => {
+		if (!sideRef.current) return undefined;
+		const id = nextId++;
+		setSections(prev => beginSection(prev, {id, echo: start.line, caller: start.caller}, Date.now()));
+		return {
+			tee: (text, tone) => printPanel(text, tone, undefined, id),
+			teeStyled: blocks => printPanelStyled(blocks, id),
+			end: (status, note) => setSections(prev => endSection(prev, id, status, Date.now(), note)),
+		};
+	};
 
 	const mountActivity = (
 		build: (control: MountControl) => UiElement,
@@ -599,21 +674,22 @@ export default function App({
 	const clearAll = () => {
 		clearSelection();
 		setLines([]);
-		setPanelLines([]);
+		setSections([]);
 		setAnchor(null);
 		setPanelScroll(0);
 	};
 
 	const mountAgentView = (build: (control: MountControl) => UiElement, print: (text: string) => void) => mountActivity(build, print, true);
-	const bridgeDeps = useRef({tee: printConsole, teeStyled: printConsoleStyled, clear: clearAll, afterRun: refreshCatalog, mountView: mountAgentView, beforeRun: startOwner, endRun: endOwner});
-	bridgeDeps.current = {tee: printConsole, teeStyled: printConsoleStyled, clear: clearAll, afterRun: refreshCatalog, mountView: mountAgentView, beforeRun: startOwner, endRun: endOwner};
+	const bridgeDeps = useRef({tee: printConsole, teeStyled: printConsoleStyled, section: openBridgeSection, clear: clearAll, afterRun: refreshCatalog, mountView: mountAgentView, beforeRun: startOwner, endRun: endOwner});
+	bridgeDeps.current = {tee: printConsole, teeStyled: printConsoleStyled, section: openBridgeSection, clear: clearAll, afterRun: refreshCatalog, mountView: mountAgentView, beforeRun: startOwner, endRun: endOwner};
 	const bridgeRef = useRef<CommandBridge | null>(null);
 	bridgeRef.current ??= createCommandBridge({
 		find: name => registry.find(name),
 		catalog: () => buildCatalog(registry.commands),
 		mode: () => getPrefs().agentCommands,
-		tee: (text, color) => bridgeDeps.current.tee(text, color),
+		tee: (text, tone) => bridgeDeps.current.tee(text, tone),
 		teeStyled: blocks => bridgeDeps.current.teeStyled(blocks),
+		section: start => bridgeDeps.current.section(start),
 		clear: () => bridgeDeps.current.clear(),
 		exit,
 		mountView: (build, print) => bridgeDeps.current.mountView(build, print),
@@ -624,9 +700,9 @@ export default function App({
 	});
 	const commandBridge = bridgeRef.current;
 
-	const makeCtx = (print: (text: string, color?: string, options?: PrintOptions) => void, styled: (blocks: readonly StyledBlock[]) => void): CommandContext => {
+	const makeCtx = (print: (text: string, tone?: ThemeTone, options?: PrintOptions) => void, styled: (blocks: readonly StyledBlock[]) => void): CommandContext => {
 		let ownsMain = false;
-		const out = (text: string, color?: string, options?: PrintOptions) => (ownsMain ? printMain : print)(text, color, options);
+		const out = (text: string, tone?: ThemeTone, options?: PrintOptions) => (ownsMain ? printMain : print)(text, tone, options);
 		return {
 			print: (text, options) => out(text, undefined, options),
 			printStyled: blocks => (ownsMain ? printMainStyled : styled)(blocks),
@@ -648,14 +724,16 @@ export default function App({
 		command: Command,
 		name: string,
 		args: string[],
-		print: (text: string, color?: string, options?: PrintOptions) => void,
+		print: (text: string, tone?: ThemeTone, options?: PrintOptions) => void,
 		styled: (blocks: readonly StyledBlock[]) => void,
-	) => {
+	): Promise<boolean> => {
 		try {
 			await command.run(args, makeCtx(print, styled));
+			return true;
 		} catch (error) {
 			log.warn('command failed', {command: name, err: error});
-			errorLines(error).forEach((text, i) => print(i === 0 ? `Error: ${text}` : `  ${text}`, c('red')));
+			errorLines(error).forEach((text, i) => print(i === 0 ? `Error: ${text}` : `  ${text}`, 'error'));
+			return false;
 		} finally {
 			refreshCatalog();
 		}
@@ -678,28 +756,53 @@ export default function App({
 			else exit();
 			return;
 		}
-		printConsole(`> ${sanitizeText(raw, 4096)}`, c('gray'));
+		const sectionId = sideRef.current ? nextId++ : undefined;
+		if (sectionId !== undefined) setSections(prev => beginSection(prev, {id: sectionId, echo: raw}, Date.now()));
+		else printMain(`${glyph('prompt', {ascii: useAscii})} ${sanitizeText(raw, 4096)}`, 'muted');
+		const print = (text: string, tone?: ThemeTone, options?: PrintOptions) => printConsole(text, tone, options, sectionId);
+		const printStyled = (blocks: unknown) => printConsoleStyled(blocks, sectionId);
+		const end = (status: 'ok' | 'failed', note?: string) => {
+			if (sectionId !== undefined) setSections(prev => endSection(prev, sectionId, status, Date.now(), note));
+		};
+		const failUnexpected = (error: unknown): never => {
+			end('failed', error instanceof Error ? error.message : String(error));
+			throw error;
+		};
 		let parsed: ReturnType<typeof parseLine>;
 		try {
 			parsed = parseLine(raw);
 		} catch (error) {
-			if (!(error instanceof LineError)) throw error;
+			if (!(error instanceof LineError)) return failUnexpected(error);
 			setHistory(prev => (prev.at(-1) === line ? prev : [...prev, line]));
-			errorLines(error).forEach((text, i) => printConsole(i === 0 ? `Error: ${text}` : `  ${text}`, c('red')));
+			errorLines(error).forEach((text, i) => print(i === 0 ? `Error: ${text}` : `  ${text}`, 'error'));
+			end('failed');
 			return;
 		}
-		if (!parsed) return;
+		if (!parsed) {
+			end('ok');
+			return;
+		}
 		const {name, args} = parsed;
 
 		setHistory(prev => (prev.at(-1) === line ? prev : [...prev, line]));
 
-		const command = registry.find(name);
+		let command: Command | undefined;
+		try {
+			command = registry.find(name);
+		} catch (error) {
+			return failUnexpected(error);
+		}
 		if (!command) {
 			log.debug('unknown command', {unknownCommand: true});
-			for (const text of unknownCommandLines(catalog, name)) printConsole(text, c('red'));
+			for (const text of unknownCommandLines(catalog, name)) print(text, 'error');
+			end('failed');
 			return;
 		}
-		await runCommand(command, name, args, printConsole, printConsoleStyled);
+		try {
+			end((await runCommand(command, name, args, print, printStyled)) ? 'ok' : 'failed');
+		} catch (error) {
+			return failUnexpected(error);
+		}
 	};
 
 	submitRef.current = handleSubmit;
@@ -712,6 +815,10 @@ export default function App({
 			return;
 		}
 		if (!isConsoleToggle(input, key)) {
+			if (isFoldToggle(input, key) && active === 'panel' && !panelView) {
+				setExpandAll(v => !v);
+				return;
+			}
 			if (side && active === 'panel') {
 				panelEpoch.current++;
 				return;
@@ -731,6 +838,8 @@ export default function App({
 	const mainViewRef = useRef<DOMElement>(null);
 	const headerRef = useRef<DOMElement>(null);
 	const consoleBodyRef = useRef<DOMElement>(null);
+	const panelOutputRef = useRef<DOMElement>(null);
+	const shownPanelRows = useRef<readonly PanelRow[]>([]);
 	const dispatchToView = (target: MountTarget, e: MouseInputEvent, rect: Rect, region?: 'header'): boolean => {
 		const mountId = pending.current[target]?.id;
 		if (mountId === undefined || e.kind === 'drag') return false;
@@ -856,6 +965,19 @@ export default function App({
 		return true;
 	};
 
+	const panelHeaderClick = (e: MouseInputEvent): boolean => {
+		const box = panelOutputRef.current;
+		const shown = shownPanelRows.current;
+		if (!box || shown.length === 0) return false;
+		const rect = measureElement(box);
+		if (!inside(rect, e.x, e.y)) return false;
+		const row = shown[e.y - (rect.y + rect.height - shown.length)];
+		if (!row?.header || row.sectionId === undefined) return false;
+		const id = row.sectionId;
+		setSections(prev => toggleFold(prev, id, expandAllRef.current));
+		return true;
+	};
+
 	const handleMouse = (e: MouseInputEvent) => {
 		if (!getPrefs().mouse) return;
 		const l = live.current;
@@ -890,6 +1012,7 @@ export default function App({
 			}
 		}
 		if (e.kind === 'press' && e.button === 'left') {
+			if (area === 'panel' && !l.hasPanelView && panelHeaderClick(e)) return;
 			if (area === 'panel' && !l.hasPanelView) promptMouse.current?.(e);
 			return;
 		}
@@ -940,53 +1063,34 @@ export default function App({
 	};
 
 	const panel = () => {
-		const height = geo.panelRows;
 		const newer = Math.min(panelScroll, Math.max(0, panelRows.length - panelOutputRows));
 		const outputRows = Math.max(0, panelOutputRows - (newer > 0 ? 1 : 0));
 		const end = Math.max(0, panelRows.length - newer);
-		const resizeColor = dragShare !== null ? c('cyan') : undefined;
-		const fit = (text: string) => (styledCells(text) <= panelWidth ? text : sliceStyledCells(text, 0, panelWidth - 1) + '…');
+		const shown = panelRows.slice(Math.max(0, end - outputRows), end);
+		shownPanelRows.current = shown;
 		return (
-			<Box
-				ref={panelRef}
-				flexDirection="column"
-				width={geo.panelColumns}
-				height={height}
-				borderStyle="single"
-				borderTop={false}
-				borderRight={false}
-				borderBottom={false}
-				borderDimColor={active !== 'panel' && dragShare === null}
-				{...(resizeColor && {borderColor: resizeColor})}
-				paddingLeft={1}
+			<ConsolePanel
+				panelRef={panelRef}
+				bodyRef={consoleBodyRef}
+				outputRef={panelOutputRef}
+				columns={geo.panelColumns}
+				height={geo.panelRows}
+				width={panelWidth}
+				focused={active === 'panel'}
+				dragging={dragShare !== null}
+				split={geo.split}
+				folds={hasFolds(sections) ? (expandAll ? 'fold' : 'unfold') : undefined}
+				activity={
+					activityShown
+						? activityRow(activityItems, panelWidth, {frame: Math.max(0, spinFrames.indexOf(spinGlyph)), ascii: useAscii})
+						: ''
+				}
+				hasView={panelView !== null}
+				rows={shown}
+				newer={newer}
 			>
-				<Box flexShrink={0}>
-					<Text dimColor wrap="truncate-end">
-						{fit(geo.split ? PANEL_TITLE : 'Console · Tab close')}
-					</Text>
-				</Box>
-				{!panelView && (
-					<Box flexDirection="column" flexGrow={1} flexShrink={1} justifyContent="flex-end" overflow="hidden">
-						{panelRows.slice(Math.max(0, end - outputRows), end).map(row => (
-							<Box key={row.key} flexShrink={0}>
-								<Text color={row.color} wrap="truncate-end">
-									{row.text === '' ? ' ' : row.text}
-								</Text>
-							</Box>
-						))}
-					</Box>
-				)}
-				{!panelView && newer > 0 && (
-					<Box flexShrink={0}>
-						<Text dimColor wrap="truncate-end">
-							{fit(scrollHint(newer, ''))}
-						</Text>
-					</Box>
-				)}
-				<Box ref={consoleBodyRef} flexDirection="column" flexShrink={0} overflow="hidden">
-					{consoleBody(panelInner, height - 1)}
-				</Box>
-			</Box>
+				{consoleBody(panelInner, geo.panelRows - 1)}
+			</ConsolePanel>
 		);
 	};
 
@@ -1011,7 +1115,7 @@ export default function App({
 						width={geo.mainColumns > 0 ? geo.mainColumns : undefined}
 						display={geo.mainColumns > 0 ? 'flex' : 'none'}
 					>
-						{mainTitle !== undefined && <TitleBar {...mainTitle} columns={geo.mainColumns} />}
+						{mainTitle !== undefined && <TitleBar {...mainTitle} columns={geo.mainColumns} focused={!(panelOpen && geo.split && active === 'panel')} />}
 						{mainHeader !== undefined && mainHeader.id === main.id && (
 							<Box ref={headerRef} flexDirection="column" flexShrink={0} overflow="hidden">
 								<ViewLayoutContext.Provider value={mainLayout}>

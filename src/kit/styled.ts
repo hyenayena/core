@@ -1,6 +1,6 @@
 import type {SpanTone, StyledBlock, StyledCell, StyledSpan} from '../../../../src/api.js';
 import {sanitizeBlock, sanitizeText} from '../hints/sanitize.js';
-import {graphemes, sliceCells, stringCells} from '../hints/width.js';
+import {graphemes, sliceCells, stringCells, truncateCells} from '../hints/width.js';
 
 import {SPAN_TONE_THEME, paintTone, toneParams, type ColorDepth} from './theme.js';
 
@@ -236,6 +236,32 @@ function truncateSpans(spans: readonly NormalSpan[], max: number): readonly Norm
 	return out;
 }
 
+// A table too wide even after the flex shrink: one bold row per data row, then `  head: value` rows.
+function keyValueRows(b: Extract<NormalBlock, {kind: 'table'}>, width: number, color: ColorDepth): string[] {
+	const out: string[] = [];
+	const render = (spans: readonly NormalSpan[], max: number, bold: boolean): string =>
+		truncateSpans(spans, max)
+			.map(s => paint(s.text, bold ? {...s, bold: true} : s, color))
+			.join('');
+	for (const row of b.rows) {
+		const cells = row.map((spans, i) => ({spans, i})).filter(c => cellsOf(c.spans) > 0);
+		const first = cells[0];
+		if (!first) continue;
+		out.push(trimEnd(render(first.spans, width, true)));
+		for (const {spans, i} of cells.slice(1)) {
+			const head = b.head?.[i] ?? '';
+			const lead = head === '' ? '  ' : `  ${head}: `;
+			if (stringCells(lead) >= width) {
+				out.push(trimEnd(truncateCells(lead, width)));
+				continue;
+			}
+			const room = width - stringCells(lead);
+			out.push(trimEnd(`${head === '' ? lead : paint(lead, {tone: 'muted'}, color)}${render(spans, room, false)}`));
+		}
+	}
+	return out;
+}
+
 function renderTable(b: Extract<NormalBlock, {kind: 'table'}>, width: number, color: ColorDepth): string[] {
 	const head = b.head?.map(h => (h === '' ? [] : [{text: h, bold: true as const, tone: 'muted' as const}]));
 	const all = head ? [head, ...b.rows] : b.rows;
@@ -248,6 +274,8 @@ function renderTable(b: Extract<NormalBlock, {kind: 'table'}>, width: number, co
 		const w = widths[flex]!;
 		widths[flex] = Math.max(Math.min(MIN_FLEX, w), w - (total - width));
 	}
+	const shown = active.reduce((n, i) => n + widths[i]!, 0) + GAP * Math.max(0, active.length - 1);
+	if (shown > width && active.length >= 2) return keyValueRows(b, width, color);
 	const out = all.map(row => {
 		let text = '';
 		active.forEach((i, k) => {

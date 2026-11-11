@@ -125,3 +125,18 @@ test('running tone', () => {
 	assert.equal(toneSgr('running', '16'), `${ESC}[33m`);
 	assert.equal(toneSgr('running', 'none'), '');
 });
+
+test('the title bar tones have a background at every colour depth and are inverse without colours', () => {
+	for (const name of ['olive', 'blue', 'teal', 'gray'] as const) {
+		const tone = `titleBar.${name}` as const;
+		assert.ok(THEME_TONES.includes(tone), tone);
+		for (const depth of ['truecolor', '256', '16'] as const) {
+			assert.match(toneSgr(tone, depth), /;(48|4[0-7]|10[0-7])|\[(4[0-7]|10[0-7])/, `${tone} ${depth}`);
+			assert.ok(inkTone(tone, depth).backgroundColor !== undefined, `${tone} ${depth}`);
+			assert.ok(inkTone(tone, depth).color !== undefined, `${tone} ${depth}`);
+		}
+		assert.deepEqual(inkTone(tone, 'none'), {inverse: true});
+	}
+	assert.deepEqual(inkTone('titleBar.olive', 'truecolor'), {backgroundColor: '#808000', color: '#000000'});
+	assert.deepEqual(DARK_THEME['titleBar.blue'].c256, {fg: 231, bg: 25});
+});

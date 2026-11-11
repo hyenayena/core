@@ -45,7 +45,7 @@ function liveLines(h: ReturnType<typeof setup>): string[] {
 	const lines = h.lastFrame().split('\n');
 	let at = 0;
 	lines.forEach((l, i) => {
-		if (l.startsWith('> ')) at = i;
+		if (l.startsWith('❯ ')) at = i;
 	});
 	return lines.slice(at);
 }
@@ -56,8 +56,8 @@ test('typing a prefix shows the list with the selection marker and a ghost', asy
 	h.press('ec');
 	await h.settle();
 	const frame = h.lastFrame();
-	assert.match(frame, /^> ec/m);
-	assert.match(frame, /^› echo/m);
+	assert.match(frame, /^❯ ec/m);
+	assert.match(frame, /▏› echo/m);
 	assert.match(frame, /ho/);
 	h.unmount();
 });
@@ -69,7 +69,7 @@ test('Tab accepts the selection and the command runs on Enter', async () => {
 	await h.settle();
 	h.press('\t');
 	await h.settle();
-	assert.match(h.lastFrame(), /^> echo/m);
+	assert.match(h.lastFrame(), /^❯ echo/m);
 	await submit(h, 'hi');
 	assert.match(h.lastFrame(), /^hi$/m);
 	h.unmount();
@@ -80,18 +80,18 @@ test('Shift+Tab, Up and Down move the selection', async () => {
 	await h.settle();
 	h.press('e');
 	await h.settle();
-	const first = h.lastFrame().split('\n').filter(l => l.startsWith('›'));
+	const first = h.lastFrame().split('\n').filter(l => l.includes('▏›'));
 	assert.equal(first.length, 1);
 	h.press('\x1b[B');
 	await h.settle();
-	const second = h.lastFrame().split('\n').filter(l => l.startsWith('›'));
+	const second = h.lastFrame().split('\n').filter(l => l.includes('▏›'));
 	assert.notDeepEqual(first, second);
 	h.press('\x1b[A');
 	await h.settle();
-	assert.deepEqual(h.lastFrame().split('\n').filter(l => l.startsWith('›')), first);
+	assert.deepEqual(h.lastFrame().split('\n').filter(l => l.includes('▏›')), first);
 	h.press('\x1b[Z');
 	await h.settle();
-	assert.match(h.lastFrame(), /^> /m);
+	assert.match(h.lastFrame(), /^❯ /m);
 	h.unmount();
 });
 
@@ -104,9 +104,9 @@ test('Down then Enter completes the line without running it', async () => {
 	await h.settle();
 	h.press('\r');
 	await h.settle();
-	assert.match(h.lastFrame(), /^> m/m);
-	assert.doesNotMatch(h.lastFrame(), /^> m$/m);
-	assert.match(h.lastFrame(), /^> mod/m);
+	assert.match(h.lastFrame(), /^❯ m/m);
+	assert.doesNotMatch(h.lastFrame(), /^❯ m$/m);
+	assert.match(h.lastFrame(), /^❯ mod/m);
 	h.unmount();
 });
 
@@ -116,13 +116,13 @@ test('Esc closes the list and Up then recalls history', async () => {
 	await submit(h, 'echo one');
 	h.press('ex');
 	await h.settle();
-	assert.match(h.lastFrame(), /^› exit/m);
+	assert.match(h.lastFrame(), /▏› exit/m);
 	h.press('\x1b');
 	await h.settle(60);
-	assert.doesNotMatch(h.lastFrame(), /^› /m);
+	assert.doesNotMatch(h.lastFrame(), /▏› /m);
 	h.press('\x1b[A');
 	await h.settle();
-	assert.match(h.lastFrame(), /^> echo one/m);
+	assert.match(h.lastFrame(), /^❯ echo one/m);
 	h.unmount();
 });
 
@@ -133,7 +133,7 @@ test('Right at the end accepts the ghost and End as well', async () => {
 	await h.settle();
 	h.press('\x1b[C');
 	await h.settle();
-	assert.match(h.lastFrame(), /^> echo/m);
+	assert.match(h.lastFrame(), /^❯ echo/m);
 	h.unmount();
 });
 
@@ -220,10 +220,10 @@ test('a long line keeps the prompt on one row with the cursor visible', async ()
 	h.press('echo ' + 'abcdefghij'.repeat(10));
 	await h.settle();
 	const lines = liveLines(h);
-	assert.equal(lines.filter(l => l.startsWith('> ')).length, 1);
-	assert.ok(lines[0]!.startsWith('> …'));
+	assert.equal(lines.filter(l => l.startsWith('❯ ')).length, 1);
+	assert.ok(lines[0]!.startsWith('❯ …'));
 	assert.ok(lines[0]!.length <= 29);
-	assert.ok(lines.slice(1).every(l => !l.startsWith('> ') && l.length <= 29));
+	assert.ok(lines.slice(1).every(l => !l.startsWith('❯ ') && l.length <= 29));
 	h.unmount();
 });
 
@@ -232,12 +232,12 @@ test('a mounted view hides the hints and they return afterwards', async () => {
 	await h.settle();
 	await submit(h, 'view');
 	assert.match(h.lastFrame(), /VIEW/);
-	assert.doesNotMatch(h.lastFrame(), /^› /m);
+	assert.doesNotMatch(h.lastFrame(), /▏› /m);
 	h.press('\x1b');
 	await h.settle(60);
 	h.press('e');
 	await h.settle();
-	assert.match(h.lastFrame(), /^› /m);
+	assert.match(h.lastFrame(), /▏› /m);
 	h.unmount();
 });
 
@@ -260,7 +260,7 @@ test('bracketed paste and multi-character chunks insert sanitised text without a
 	await h.settle();
 	h.press('\x1b[200~echo a\tb\nc\x1b[31m\x1b[201~');
 	await h.settle();
-	assert.match(h.lastFrame(), /^> echo a b c/m);
+	assert.match(h.lastFrame(), /^❯ echo a b c/m);
 	h.unmount();
 
 	const g = setup();
@@ -268,7 +268,7 @@ test('bracketed paste and multi-character chunks insert sanitised text without a
 	const before = g.frameCount();
 	g.press('ec\tho');
 	await g.settle();
-	assert.match(g.lastFrame(), /^> ec ho/m);
+	assert.match(g.lastFrame(), /^❯ ec ho/m);
 	assert.ok(g.frameCount() - before <= 3);
 	g.unmount();
 });
@@ -290,7 +290,7 @@ test('an unclosed quote prints an error, goes into the history and runs nothing'
 	assert.equal(ran, 0);
 	h.press('\x1b[A');
 	await h.settle();
-	assert.match(h.lastFrame(), /^> say "a b/m);
+	assert.match(h.lastFrame(), /^❯ say "a b/m);
 	h.unmount();
 });
 
@@ -300,5 +300,58 @@ test('a quoted argument reaches the command as one word', async () => {
 	await h.settle();
 	await submit(h, 'say "a b" --x="c d" e');
 	assert.deepEqual(seen, [['a b', '--x=c d', 'e']]);
+	h.unmount();
+});
+
+test('the prompt glyph and the words are coloured by role at a pinned depth, and the dropdown sits under the token', async () => {
+	const {default: chalk} = await import('chalk');
+	const {resetColorDepthCacheForTests} = await import('../../src/kit/theme.js');
+	process.env['YENA_COLOR'] = '256';
+	resetColorDepthCacheForTests();
+	chalk.level = 2;
+	try {
+		const h = setup();
+		await h.settle();
+		h.press('echo ');
+		await h.settle();
+		const frame = h.lastFrame();
+		const line = frame.split('\n').find(l => l.replace(SGR, '').startsWith('❯ echo'))!;
+		assert.ok(line.includes('\u001b[38;5;75m❯ '), 'the glyph is in the focus tone');
+		assert.ok(line.includes('\u001b[38;5;73mecho'), 'a known command is in the accent tone');
+		h.unmount();
+
+		const g = setup();
+		await g.settle();
+		g.press('zzz ');
+		await g.settle();
+		const bad = g.lastFrame().split('\n').find(l => l.replace(SGR, '').startsWith('❯ zzz'))!;
+		assert.ok(bad.includes('\u001b[38;5;168mzzz'), 'an unknown finished first word is an error');
+		g.unmount();
+
+	} finally {
+		chalk.level = 0;
+		delete process.env['YENA_COLOR'];
+		resetColorDepthCacheForTests();
+	}
+});
+
+test('the dropdown starts at the cell of the word being completed', async () => {
+	const tool: Command = {
+		name: 'tool',
+		description: 'a tool',
+		subcommands: [
+			{name: 'ask', usage: 'tool ask', description: 'Ask'},
+			{name: 'auth', usage: 'tool auth', description: 'Auth'},
+		],
+		run: () => {},
+	};
+	const h = setup([tool]);
+	await h.settle();
+	h.press('tool a');
+	await h.settle();
+	const rows = h.lastFrame().replace(SGR, '').split('\n');
+	const prompt = rows.findIndex(l => l.startsWith('❯ tool a'));
+	const bar = rows.slice(prompt + 1).find(l => l.includes('▏'));
+	assert.equal(bar?.indexOf('▏'), '❯ tool '.length, 'the bar is under the start of the word');
 	h.unmount();
 });

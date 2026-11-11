@@ -99,16 +99,14 @@ test('command stage shows the usage of the selected item', () => {
 	assert.notEqual(text(first), text(second));
 });
 
-test('matched ranges are underlined and bold, colour is optional', () => {
+test('matched ranges are underlined and bold in the accent tone', () => {
 	const h: HintResult = {stage: 'command', tokenStart: 0, token: 'e', items: [item('echo', 'x', [[0, 2]])]};
-	const coloured = layoutHints(h, {sel: 0, color: true}, {columns: 80, rows: 24})[0]!;
-	const hit = coloured.segments.find(s => s.underline)!;
+	const row = layoutHints(h, {sel: 0}, {columns: 80, rows: 24})[0]!;
+	const hit = row.segments.find(s => s.underline)!;
 	assert.equal(hit.text, 'ec');
 	assert.equal(hit.bold, true);
-	assert.equal(hit.color, 'cyan');
-	const plain = layoutHints(h, {sel: 0, color: false}, {columns: 80, rows: 24})[0]!;
-	assert.equal(plain.segments.find(s => s.underline)!.color, undefined);
-	assert.ok(text(plain).startsWith('› echo'));
+	assert.equal(hit.tone, 'accent');
+	assert.ok(text(row).startsWith('› echo'));
 });
 
 test('rows are bounded by columns - 1 cells, including wide text', () => {
@@ -205,9 +203,55 @@ test('a doc row follows the usage when there are no items', () => {
 	const rows = layoutHints(h, {sel: 0}, {columns: 80, rows: 24});
 	assert.deepEqual(kinds(rows), ['usage', 'doc']);
 	assert.equal(text(rows[1]!), '  <text>…  What to ask');
-	assert.deepEqual(rows[1]!.segments.map(s => [s.bold === true, s.dim === true]), [[false, false], [true, false], [false, false], [false, true]]);
+	assert.deepEqual(rows[1]!.segments.map(s => [s.bold === true, s.tone === 'muted']), [[false, false], [true, false], [false, false], [false, true]]);
 	assert.deepEqual(kinds(layoutHints(h, {sel: 0}, {columns: 80, rows: 3})), ['usage']);
 	const narrow = layoutHints(h, {sel: 0}, {columns: 14, rows: 24});
 	for (const r of narrow) assert.ok(stringCells(text(r)) <= 13);
 	assert.deepEqual(kinds(layoutHints(computeHints(catalog, 'doc ask -'), {sel: 0}, {columns: 80, rows: 24})), ['usage', 'item', 'item']);
+});
+
+test('with an anchor the rows form a dropdown: bar, indent, selected row on the surface', () => {
+	const h = many(3);
+	const rows = layoutHints(h, {sel: 1, anchor: 6}, {columns: 80, rows: 24});
+	assert.deepEqual(kinds(rows), ['usage', 'item', 'item', 'item']);
+	for (const r of rows) {
+		assert.equal(text(r).startsWith(`${' '.repeat(6)}▏`), true, text(r));
+		assert.equal(r.segments[1]!.tone, 'frame');
+	}
+	const selected = rows.filter(r => r.selected);
+	assert.equal(selected.length, 1);
+	assert.equal(selected[0]!.item, 1);
+	assert.equal(selected[0]!.segments.slice(2).every(s => s.surface === true), true);
+	assert.match(text(selected[0]!), /▏› cmd1/);
+	assert.equal(rows.filter(r => !r.selected).some(r => r.segments.some(s => s.surface)), false);
+	assert.equal(stringCells(text(selected[0]!)), stringCells(text(rows[1]!)) , 'the band is as wide as the box');
+});
+
+test('the dropdown shifts left when it would not fit and never passes columns - 1', () => {
+	const h = many(3);
+	const wide = stringCells(text(layoutHints(h, {sel: 0, anchor: 0}, {columns: 80, rows: 24})[1]!));
+	for (const columns of [14, 21, 30, 40, 80]) {
+		for (const anchor of [0, 5, 20, 39, 70, 500]) {
+			for (const r of layoutHints(h, {sel: 0, anchor}, {columns, rows: 24})) {
+				assert.ok(stringCells(text(r)) <= columns - 1, `${columns}/${anchor}: ${text(r)}`);
+			}
+		}
+	}
+	const shifted = layoutHints(h, {sel: 0, anchor: 70}, {columns: 80, rows: 24})[1]!;
+	assert.equal(text(shifted).indexOf('▏'), 80 - 1 - (stringCells(text(shifted)) - text(shifted).indexOf('▏')));
+	assert.ok(wide > 0);
+});
+
+test('descriptions are muted and dropped on narrow screens; hits are accent; the footer is muted', () => {
+	const rows = layoutHints(many(20), {sel: 0, anchor: 0}, {columns: 80, rows: 24});
+	assert.equal(rows[1]!.segments.some(s => s.tone === 'muted' && s.text.includes('desc')), true);
+	assert.equal(rows.at(-1)!.segments.at(-1)!.tone, 'muted');
+	const narrow = layoutHints(many(3), {sel: 0, anchor: 0}, {columns: 19, rows: 24});
+	assert.equal(narrow.some(r => text(r).includes('desc')), false);
+});
+
+test('without an anchor the layout is the old flat list', () => {
+	const rows = layoutHints(many(3), {sel: 0}, {columns: 80, rows: 24});
+	assert.equal(text(rows[1]!).startsWith('› cmd0'), true);
+	assert.equal(rows.some(r => text(r).includes('▏')), false);
 });

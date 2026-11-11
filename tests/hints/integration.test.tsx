@@ -49,7 +49,7 @@ test('an alias match shows the alias with its canonical name', async () => {
 	const h = setup();
 	await h.settle();
 	await type(h, 'mod r');
-	assert.match(h.lastFrame(), /^› rm\s+\(remove\) Remove modules$/m);
+	assert.match(h.lastFrame(), /▏› rm\s+\(remove\) Remove modules$/m);
 	h.unmount();
 });
 
@@ -58,13 +58,13 @@ test('cycling with Tab and Shift+Tab, then Esc restores the typed text', async (
 	await h.settle();
 	await type(h, 'cl');
 	await type(h, '\t');
-	assert.match(h.lastFrame(), /^> clone/m);
+	assert.match(h.lastFrame(), /^❯ clone/m);
 	await type(h, '\x1b[Z');
-	assert.match(h.lastFrame(), /^> clear/m);
+	assert.match(h.lastFrame(), /^❯ clear/m);
 	await type(h, '\t');
 	await type(h, ESC);
-	assert.match(h.lastFrame(), /^> cl$/m);
-	assert.doesNotMatch(h.lastFrame(), /^› /m);
+	assert.match(h.lastFrame(), /^❯ cl$/m);
+	assert.doesNotMatch(h.lastFrame(), /▏› /m);
 	h.unmount();
 });
 
@@ -72,14 +72,14 @@ test('a subcommand with no further choices still shows its usage line', async ()
 	const h = setup();
 	await h.settle();
 	await type(h, 'tool ask ');
-	assert.match(h.lastFrame(), /^\s+tool ask \[--new\] <text>$/m);
+	assert.match(h.lastFrame(), /^\s*▏\s*tool ask \[--new\] <text>$/m);
 	h.unmount();
 	const g = setup();
 	await g.settle();
 	await type(g, 'mod remove ');
-	assert.match(g.lastFrame(), /^\s+mod remove <name>…$/m);
+	assert.match(g.lastFrame(), /^\s*▏\s*mod remove <name>…$/m);
 	await type(g, 'x');
-	assert.match(g.lastFrame(), /^\s+mod remove <name>…$/m);
+	assert.match(g.lastFrame(), /^\s*▏\s*mod remove <name>…$/m);
 	g.unmount();
 });
 
@@ -104,10 +104,10 @@ test('a usage-only row is not interactive: Tab does nothing, Up recalls history,
 	await type(h, '\x15');
 	await type(h, 'tool ask ');
 	await type(h, '\t');
-	assert.match(h.lastFrame(), /^> tool ask$/m);
-	assert.match(h.lastFrame(), /^\s+tool ask \[--new\] <text>$/m);
+	assert.match(h.lastFrame(), /^❯ tool ask$/m);
+	assert.match(h.lastFrame(), /^\s*▏\s*tool ask \[--new\] <text>$/m);
 	await type(h, '\x1b[A');
-	assert.match(h.lastFrame(), /^> rec one$/m);
+	assert.match(h.lastFrame(), /^❯ rec one$/m);
 	assert.doesNotMatch(h.lastFrame(), /<text>/);
 	await type(h, '\r');
 	assert.deepEqual(ran, [['one'], ['one']]);
@@ -122,6 +122,6 @@ test('a command without a run function prints an error and the prompt keeps work
 	await type(h, '\r');
 	assert.match(h.lastFrame(), /^Error: /m);
 	await type(h, 'mod ');
-	assert.match(h.lastFrame(), /^› install/m);
+	assert.match(h.lastFrame(), /▏› install/m);
 	h.unmount();
 });

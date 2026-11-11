@@ -94,7 +94,7 @@ test('malformed registry entries do not break lookup, hints or help', async () =
 	await h.settle();
 	h.press('go');
 	await h.settle();
-	assert.match(h.lastFrame(), /^› good/m);
+	assert.match(h.lastFrame(), /▏› good/m);
 	h.press('\x7f');
 	h.press('\x7f');
 	await submit(h, 'good');

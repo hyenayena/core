@@ -3,6 +3,7 @@ import {Box, Text, type DOMElement} from 'ink';
 import type {VisibleRow} from '../transcript/scroll.js';
 import {sliceStyledCells, stripStyles} from '../transcript/wrap.js';
 import {sliceCells, truncateCells} from '../hints/width.js';
+import {inkTone} from '../kit/theme.js';
 
 export const scrollHint = (newer: number, keys = 'PgDn or Shift+↓') =>
 	`↓ ${newer} newer line${newer === 1 ? '' : 's'}${keys === '' ? '' : ` · ${keys}`}`;
@@ -12,14 +13,14 @@ export type RowMarks = (row: VisibleRow) => [number, number] | undefined;
 function Row({row, cells}: {row: VisibleRow; cells: [number, number] | undefined}) {
 	if (!cells) {
 		return (
-			<Text color={row.color} wrap="truncate-end">
+			<Text {...(row.tone ? inkTone(row.tone) : {})} wrap="truncate-end">
 				{row.text === '' ? ' ' : row.text}
 			</Text>
 		);
 	}
 	const [from, to] = cells;
 	return (
-		<Text color={row.color} wrap="truncate-end">
+		<Text {...(row.tone ? inkTone(row.tone) : {})} wrap="truncate-end">
 			{sliceStyledCells(row.text, 0, from)}
 			<Text inverse>{sliceCells(stripStyles(row.text), from, to - from)}</Text>
 			{sliceStyledCells(row.text, to, Number.MAX_SAFE_INTEGER)}

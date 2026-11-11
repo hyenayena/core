@@ -2,6 +2,7 @@ import {styledCells} from '../transcript/wrap.js';
 import {stringCells, truncateCells} from '../hints/width.js';
 import {defineBuiltinSection, type GalleryRenderer} from '../kit/gallery.js';
 import {GLYPHS, SPINNER_GLYPHS} from '../kit/glyphs.js';
+import {consoleRenderer} from './console-section.js';
 import {COLOR_DEPTHS, SGR_ATTR, THEME_TONES, paintTone, type ColorDepth} from '../kit/theme.js';
 
 const SAMPLE = 'Sample text';
@@ -51,4 +52,5 @@ const glyphsRenderer: GalleryRenderer = ({width, ascii}) => {
 export function registerBuiltinSections(): void {
 	defineBuiltinSection({name: 'theme', title: 'Theme', description: 'Every tone at the active colour depth', load: () => themeRenderer});
 	defineBuiltinSection({name: 'glyphs', title: 'Glyphs', description: 'Symbols and their ASCII fallbacks', load: () => glyphsRenderer});
+	defineBuiltinSection({name: 'console', title: 'Console panel', description: 'The side console: title, activity, sections and the prompt', load: () => consoleRenderer});
 }

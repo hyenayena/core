@@ -16,3 +16,5 @@ export const isHostKey = (input: string, key?: KeyLike): boolean => isConsoleTog
 const QUIT_LINES = new Set([':q', ':q!']);
 
 export const isQuitLine = (line: string): boolean => QUIT_LINES.has(line.trim());
+
+export const isFoldToggle = (input: string, key?: KeyLike): boolean => Boolean(key?.ctrl) && input === 'o';

@@ -147,7 +147,7 @@ test('output goes to the console panel beside a view, and autostart still works'
 	assert.equal(result.status, 'ok');
 	await h.settle(80);
 	const frame = h.lastFrame();
-	assert.match(frame, /\[bot\] > say/);
+	assert.match(frame, /❯.*say.*bot/);
 	assert.match(frame, /said-it/);
 	h.unmount();
 });
@@ -225,7 +225,7 @@ test('an agent view opens the console beside the chat without taking focus, and 
 	const frame = h.lastFrame();
 	assert.doesNotMatch(frame, /AGENT-VIEW/);
 	assert.match(frame, /Console/);
-	assert.match(frame, /\[tester\] > peek/);
+	assert.match(frame, /❯.*peek.*tester/);
 	await pastGrace(h);
 	assert.doesNotMatch(h.lastFrame(), /Console/);
 	h.unmount();
@@ -330,8 +330,9 @@ test('a failed agent command with a view leaves its footer and the view is gone'
 	await h.settle(80);
 	assert.equal(result.status, 'error');
 	assert.doesNotMatch(h.lastFrame(), /AGENT-VIEW/);
-	assert.match(h.lastFrame(), /\[tester\] > boom/);
+	assert.match(h.lastFrame(), /✗.*boom.*tester/);
 	assert.match(h.lastFrame(), /exploded/);
+	assert.match(h.lastFrame(), /boom: error \(exploded\)/);
 	h.unmount();
 });
 

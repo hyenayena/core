@@ -16,10 +16,10 @@ import type {Catalog, CatalogCommand, CatalogSub} from '../hints/catalog.js';
 import {policyOf, walkPath} from '../hints/path.js';
 import {sanitizeBlock, sanitizeText, sanitizeToken} from '../hints/sanitize.js';
 import {unknownCommandLines} from '../hints/typo.js';
-import {c} from '../hints/style.js';
 import {errorLines} from '../error-lines.js';
 import {createCapture} from './capture.js';
 import {normalizeStyled, plainLines, type NormalStyled} from '../kit/styled.js';
+import type {ThemeTone} from '../kit/theme.js';
 import {LineError, parseLine} from '../parse-line.js';
 import {isQuitLine} from '../view/keys.js';
 import type {AgentMode} from '../view/prefs.js';
@@ -36,12 +36,19 @@ export const hasUnsafeChars = (line: string): boolean => UNSAFE_LINE.test(line);
 
 export type AgentViewHandle = {done: Promise<void>; close: () => void};
 
+export type BridgeSection = {
+	tee: (text: string, tone?: ThemeTone) => void;
+	teeStyled?: (blocks: NormalStyled) => void;
+	end: (status: 'ok' | 'failed', note?: string) => void;
+};
+
 export type BridgeDeps = {
 	find: (name: string) => Command | undefined;
 	catalog: () => Catalog;
 	mode: () => AgentMode;
-	tee: (text: string, color?: string) => void;
+	tee: (text: string, tone?: ThemeTone) => void;
 	teeStyled?: (blocks: NormalStyled) => void;
+	section?: (start: {line: string; caller: string}) => BridgeSection | undefined;
 	clear: () => void;
 	exit: () => void;
 	mountView?: (build: (control: MountControl) => UiElement, print: (text: string) => void) => AgentViewHandle;
@@ -108,6 +115,7 @@ export function createCommandBridge(deps: BridgeDeps): CommandBridge {
 		let mounted = false;
 		let viewForced = false;
 		let running = false;
+		let section: BridgeSection | undefined;
 
 		const finish = (status: CommandRunStatus, text = '', reason?: string): CommandRunResult => {
 			outputChars = text.length;
@@ -131,10 +139,19 @@ export function createCommandBridge(deps: BridgeDeps): CommandBridge {
 					});
 				} catch {}
 			}
-			if (status !== 'ok' && status !== 'off') {
-				const label = meta.command ?? 'command';
-				const suffix = reason === undefined ? '' : ` (${sanitizeText(reason, 200)})`;
-				safeTee(`[${caller}] ${label}: ${status}${suffix}`, c('yellow'));
+			const failedNote =
+				status !== 'ok' && status !== 'off'
+					? `${meta.command ?? 'command'}: ${status}${reason === undefined ? '' : ` (${sanitizeText(reason, 200)})`}`
+					: undefined;
+			if (section) {
+				const open = section;
+				section = undefined;
+				try {
+					if (failedNote === undefined) open.end('ok');
+					else open.end('failed', failedNote);
+				} catch {}
+			} else if (failedNote !== undefined) {
+				safeTee(`[${caller}] ${failedNote}`, 'warn');
 			}
 			if (running) {
 				running = false;
@@ -145,9 +162,9 @@ export function createCommandBridge(deps: BridgeDeps): CommandBridge {
 			return result;
 		};
 
-		const safeTee = (text: string, color?: string) => {
+		const safeTee = (text: string, tone?: ThemeTone) => {
 			try {
-				deps.tee(text, color);
+				(section ?? deps).tee(text, tone);
 			} catch {}
 		};
 
@@ -157,7 +174,11 @@ export function createCommandBridge(deps: BridgeDeps): CommandBridge {
 
 			const raw = req?.line;
 			if (typeof raw !== 'string') return finish('invalid', '', 'the line must be a string');
-			safeTee(`[${caller}] > ${sanitizeText(raw, MAX_LINE)}`, c('magenta'));
+			const echo = sanitizeText(raw, MAX_LINE);
+			try {
+				section = deps.section?.({line: echo, caller});
+			} catch {}
+			if (!section) safeTee(`[${caller}] > ${echo}`, 'accent');
 			if (raw.trim() === '') return finish('invalid', '', 'the line is empty');
 			if (raw.length > MAX_LINE) return finish('invalid', '', `the line is longer than ${MAX_LINE} characters`);
 			if (hasUnsafeChars(raw)) return finish('invalid', '', 'the line contains control or formatting characters');
@@ -246,9 +267,10 @@ export function createCommandBridge(deps: BridgeDeps): CommandBridge {
 				printStyled: blocks => {
 					const styled = normalizeStyled(blocks);
 					const plain = plainLines(styled).join('\n');
-					if (deps.teeStyled) {
+					const teeStyled = section?.teeStyled ?? (section ? undefined : deps.teeStyled);
+					if (teeStyled) {
 						try {
-							deps.teeStyled(styled);
+							teeStyled(styled);
 						} catch {}
 					} else if (plain !== '') safeTee(plain);
 					if (capturing && plain !== '') capture(plain);
@@ -311,7 +333,7 @@ export function createCommandBridge(deps: BridgeDeps): CommandBridge {
 			}
 			if (failure) {
 				const shown = failure.map((text, i) => (i === 0 ? `Error: ${text}` : `  ${text}`));
-				for (const text of shown) safeTee(text, c('red'));
+				for (const text of shown) safeTee(text, 'error');
 				capture(shown.join('\n'));
 				capturing = false;
 				return finish('error', output.text(), failure[0]);

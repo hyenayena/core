@@ -116,11 +116,13 @@ test('the wheel over the panel scrolls the panel output only', async () => {
 	await send('\r', 120);
 	assert.match(h.lastFrame(), /row-59/);
 	await send(wheelUp(80, 10));
+	await send(wheelUp(80, 10));
 	let frame = h.lastFrame();
-	assert.match(frame, /↓ 1 newer line/);
+	assert.match(frame, /↓ 2 newer lines/);
 	assert.doesNotMatch(frame, /PgDn/, 'the panel hint has no keys, the transcript did not scroll');
 	assert.doesNotMatch(frame, /row-59/);
 	assert.match(frame, /row-56/);
+	await send(wheelDown(80, 10));
 	await send(wheelDown(80, 10));
 	frame = h.lastFrame();
 	assert.doesNotMatch(frame, /newer line/);
@@ -134,6 +136,7 @@ test('a scrolled panel stays on its lines while output arrives', async () => {
 	await send(CTRL_T);
 	await send('many');
 	await send('\r', 120);
+	await send(wheelUp(80, 10));
 	await send(wheelUp(80, 10));
 	await send('many');
 	await send('\r', 120);
@@ -155,7 +158,7 @@ test('a click moves the focus between the chat and the panel, and nothing else',
 	await send(click(80, 10));
 	assert.match(h.lastFrame(), /CHAT\[x\] idle/);
 	await send('ab');
-	assert.match(h.lastFrame(), /> ab/);
+	assert.match(h.lastFrame(), /❯ ab/);
 	h.unmount();
 });
 
@@ -167,7 +170,7 @@ test('a narrow screen sends everything to the console', async () => {
 	await send('\r', 120);
 	await send(click(5, 5));
 	await send('zz');
-	assert.match(h.lastFrame(), /> zz/, 'the click kept the console focused');
+	assert.match(h.lastFrame(), /❯ zz/, 'the click kept the console focused');
 	await send(wheelUp(5, 5));
 	assert.match(h.lastFrame(), /↓ 1 newer line/);
 	assert.doesNotMatch(h.lastFrame(), /PgDn/);

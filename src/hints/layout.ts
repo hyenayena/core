@@ -1,13 +1,14 @@
 import type {HintItem, HintResult, UsageLine} from './model.js';
-import {colorEnabled} from './style.js';
+import {glyph} from '../kit/glyphs.js';
+import type {ThemeTone} from '../kit/theme.js';
 import {cellWidth, graphemes, stringCells, truncateCells} from './width.js';
 
 export type Segment = {
 	text: string;
 	bold?: boolean;
 	underline?: boolean;
-	dim?: boolean;
-	color?: string;
+	tone?: ThemeTone;
+	surface?: boolean;
 	inverse?: boolean;
 };
 
@@ -20,14 +21,14 @@ export type HintRow = {
 
 export type HintUi = {
 	sel: number;
-	color?: boolean;
+	anchor?: number;
 };
 
 const MARKER = '› ';
 const BLANK_MARKER = '  ';
 const MIN_COLUMNS = 8;
 const NAMES_ONLY_COLUMNS = 20;
-const HIGHLIGHT_COLOR = 'cyan';
+const HIGHLIGHT_TONE: ThemeTone = 'accent';
 
 export function rowBudget(rows: number, columns: number): {max: number} {
 	const r = Number.isFinite(rows) ? Math.floor(rows) : 24;
@@ -59,7 +60,7 @@ function pad(n: number): string {
 	return ' '.repeat(Math.max(0, n));
 }
 
-function nameSegments(item: HintItem, width: number, color: boolean): {segments: Segment[]; cells: number} {
+function nameSegments(item: HintItem, width: number): {segments: Segment[]; cells: number} {
 	let gs = graphemes(item.label);
 	const total = gs.reduce((n, g) => n + cellWidth(g), 0);
 	let ellipsis = false;
@@ -85,9 +86,7 @@ function nameSegments(item: HintItem, width: number, color: boolean): {segments:
 	const flush = () => {
 		if (run === '') return;
 		segments.push(
-			runHit
-				? {text: run, bold: true, underline: true, ...(color ? {color: HIGHLIGHT_COLOR} : {})}
-				: {text: run},
+			runHit ? {text: run, bold: true, underline: true, tone: HIGHLIGHT_TONE} : {text: run},
 		);
 		run = '';
 	};
@@ -108,33 +107,32 @@ function itemRow(
 	selected: boolean,
 	nameWidth: number,
 	columns: number,
-	color: boolean,
 ): HintRow {
-	const name = nameSegments(item, nameWidth, color);
+	const name = nameSegments(item, nameWidth);
 	const segments: Segment[] = [
-		selected ? {text: MARKER, bold: true, ...(color ? {color: HIGHLIGHT_COLOR} : {})} : {text: BLANK_MARKER},
+		selected ? {text: MARKER, bold: true, tone: HIGHLIGHT_TONE} : {text: BLANK_MARKER},
 		...name.segments,
 	];
 	if (columns >= NAMES_ONLY_COLUMNS) {
 		const desc = `${item.via ? `(${item.via}) ` : ''}${item.description ?? ''}`.trim();
 		if (desc !== '') {
-			segments.push({text: pad(nameWidth - name.cells + 2)}, {text: desc, dim: true});
+			segments.push({text: pad(nameWidth - name.cells + 2)}, {text: desc, tone: 'muted'});
 		}
 	}
 	return {kind: 'item', selected, segments: clip(segments, columns - 1)};
 }
 
 function usageRow(usage: UsageLine, columns: number): HintRow {
-	const segments: Segment[] = [{text: BLANK_MARKER}, {text: usage.head, dim: true}];
+	const segments: Segment[] = [{text: BLANK_MARKER}, {text: usage.head, tone: 'muted'}];
 	usage.tokens.forEach((t, i) => {
-		segments.push({text: ' ', dim: true});
-		segments.push(i === usage.active ? {text: t.text, bold: true, underline: true} : {text: t.text, dim: true});
+		segments.push({text: ' ', tone: 'muted'});
+		segments.push(i === usage.active ? {text: t.text, bold: true, underline: true} : {text: t.text, tone: 'muted'});
 	});
 	return {kind: 'usage', segments: clip(segments, columns - 1)};
 }
 
 function docRow(doc: {label: string; description: string}, columns: number): HintRow {
-	const segments: Segment[] = [{text: BLANK_MARKER}, {text: doc.label, bold: true}, {text: '  '}, {text: doc.description, dim: true}];
+	const segments: Segment[] = [{text: BLANK_MARKER}, {text: doc.label, bold: true}, {text: '  '}, {text: doc.description, tone: 'muted'}];
 	return {kind: 'doc', segments: clip(segments, columns - 1)};
 }
 
@@ -150,23 +148,38 @@ export function layoutHints(
 	}
 }
 
+const rowCells = (row: HintRow): number => row.segments.reduce((n, s) => n + stringCells(s.text), 0);
+
+// A compact dropdown: a frame bar on the left, the selected row on the surface band.
+function dropdown(rows: HintRow[], anchor: number, columns: number): HintRow[] {
+	const widest = Math.max(0, ...rows.map(rowCells));
+	const left = Math.max(0, Math.min(Math.floor(anchor) || 0, columns - 1 - (1 + widest)));
+	const bar: Segment = {text: glyph('bar'), tone: 'frame'};
+	return rows.map(row => {
+		const inner = row.selected ? row.segments.map(s => ({...s, surface: true})) : row.segments;
+		const fill: Segment[] = row.selected ? [{text: pad(widest - rowCells(row)), surface: true}] : [];
+		return {...row, segments: clip([{text: pad(left)}, bar, ...inner, ...fill], columns - 1)};
+	});
+}
+
 function layout(h: HintResult, ui: HintUi, size: {columns: number; rows: number}): HintRow[] {
 	const columns = Number.isFinite(size.columns) ? Math.floor(size.columns) : 80;
 	const rows = Number.isFinite(size.rows) ? Math.floor(size.rows) : 24;
 	const total = rowBudget(rows, columns).max;
 	if (total < 1 || !h || h.stage === 'none') return [];
 
-	const color = ui.color ?? colorEnabled();
 	const items = Array.isArray(h.items) ? h.items : [];
 	const sel = items.length === 0 ? 0 : Math.min(Math.max(0, Math.floor(ui.sel) || 0), items.length - 1);
 	const usage = (h.stage === 'command' || h.stage === 'sub' ? items[sel]?.usage : undefined) ?? h.usage;
 
 	const out: HintRow[] = [];
+	const contentColumns = ui.anchor === undefined ? columns : columns - 1;
 	const wantUsage = usage !== undefined && (total >= 3 || items.length === 0);
-	if (wantUsage && usage) out.push(usageRow(usage, columns));
-	if (wantUsage && usage?.doc && items.length === 0 && total >= 2) out.push(docRow(usage.doc, columns));
+	if (wantUsage && usage) out.push(usageRow(usage, contentColumns));
+	if (wantUsage && usage?.doc && items.length === 0 && total >= 2) out.push(docRow(usage.doc, contentColumns));
 	const r = total - out.length;
-	if (items.length === 0 || r < 1) return out;
+	const finish = (rows: HintRow[]): HintRow[] => (ui.anchor === undefined ? rows : dropdown(rows, ui.anchor, columns));
+	if (items.length === 0 || r < 1) return finish(out);
 
 	let start = 0;
 	let count = items.length;
@@ -185,10 +198,10 @@ function layout(h: HintResult, ui: HintUi, size: {columns: number; rows: number}
 	const widest = Math.max(...visible.map(i => stringCells(i.label)));
 	const nameWidth = Math.min(widest, Math.floor(columns / 2));
 	visible.forEach((item, i) => {
-		out.push({...itemRow(item, start + i === sel, nameWidth, columns, color), item: start + i});
+		out.push({...itemRow(item, start + i === sel, nameWidth, contentColumns), item: start + i});
 	});
 	if (footer > 0) {
-		out.push({kind: 'footer', segments: clip([{text: `${BLANK_MARKER}+${footer} more`, dim: true}], columns - 1)});
+		out.push({kind: 'footer', segments: clip([{text: `${BLANK_MARKER}+${footer} more`, tone: 'muted'}], contentColumns - 1)});
 	}
-	return out;
+	return finish(out);
 }

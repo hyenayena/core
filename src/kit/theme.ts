@@ -37,6 +37,10 @@ export const THEME_TONES = [
 	'code.regexp',
 	'code.meta',
 	'code.punctuation',
+	'titleBar.olive',
+	'titleBar.blue',
+	'titleBar.teal',
+	'titleBar.gray',
 ] as const;
 
 export type ThemeTone = (typeof THEME_TONES)[number];
@@ -98,6 +102,10 @@ const DARK: Record<ThemeTone, ToneDef> = {
 	'code.regexp': def({fg: '#56b6c2'}, {fg: 73}, {fg: 6}),
 	'code.meta': def({fg: '#7f848e'}, {fg: 244}, D, D),
 	'code.punctuation': def({}, {}, {}),
+	'titleBar.olive': def({fg: '#000000', bg: '#808000'}, {fg: 16, bg: 100}, {fg: 0, bg: 3}, {inverse: true}),
+	'titleBar.blue': def({fg: '#ffffff', bg: '#1f4e8c'}, {fg: 231, bg: 25}, {fg: 15, bg: 4}, {inverse: true}),
+	'titleBar.teal': def({fg: '#ffffff', bg: '#00796b'}, {fg: 231, bg: 30}, {fg: 0, bg: 6}, {inverse: true}),
+	'titleBar.gray': def({fg: '#ffffff', bg: '#5a5a5a'}, {fg: 231, bg: 240}, {fg: 15, bg: 8}, {inverse: true}),
 };
 
 export const DARK_THEME: Theme = Object.freeze(DARK);

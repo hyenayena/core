@@ -35,7 +35,7 @@ function setup(commands: Command[], size: {columns: number; rows: number}) {
 	const promptRow = (from = 0) => {
 		const all = lines();
 		for (let y = all.length - 1; y >= 0; y--) {
-			const x = (all[y] as string).indexOf('> ', from);
+			const x = (all[y] as string).indexOf('❯ ', from);
 			if (x >= 0) return {x, y, text: all[y] as string};
 		}
 		throw new Error('no prompt row');
@@ -58,7 +58,7 @@ const basic: Command[] = [
 ];
 
 const hintRow = (lines: string[], p: {x: number; y: number}, name: string) =>
-	lines.findIndex((l, i) => i > p.y && new RegExp(`^(› |  )${name}\\b`).test(l.slice(p.x)));
+	lines.findIndex((l, i) => i > p.y && new RegExp(`▏(› |  )${name}\\b`).test(l));
 
 test('a click on a hint row accepts it and never runs the line', async () => {
 	ran.length = 0;
@@ -74,7 +74,7 @@ test('a click on a hint row accepts it and never runs the line', async () => {
 	assert.deepEqual(above(), before, 'nothing was printed');
 	assert.equal(hintRow(t.lines(), p, 'ecology'), -1, 'the list now shows the usage only');
 	await t.type('x');
-	assert.equal(t.promptRow().text.slice(p.x).trimEnd(), '> echo x');
+	assert.equal(t.promptRow().text.slice(p.x).trimEnd(), '❯ echo x');
 	assert.deepEqual(ran, []);
 	t.h.unmount();
 });
@@ -89,7 +89,7 @@ test('a click on a non-selected hint row accepts that item', async () => {
 	assert.ok(y > p.y);
 	await t.click(p.x, y);
 	await t.type('x');
-	assert.equal(t.promptRow().text.slice(p.x).trimEnd(), '> ecology x');
+	assert.equal(t.promptRow().text.slice(p.x).trimEnd(), '❯ ecology x');
 	assert.deepEqual(ran, []);
 	t.h.unmount();
 });
@@ -107,7 +107,7 @@ test('other buttons, releases and wheel events do nothing', async () => {
 	await t.click(p.x, y, {kind: 'wheel', button: 'none', wheel: 'up'});
 	await t.click(p.x, p.y, {button: 'right'});
 	await t.type('x');
-	assert.equal(t.promptRow().text.slice(p.x).trimEnd(), '> ecx');
+	assert.equal(t.promptRow().text.slice(p.x).trimEnd(), '❯ ecx');
 	t.h.unmount();
 });
 
@@ -156,7 +156,7 @@ test('the same in the side panel, where offsets include the border and padding',
 	const y = hintRow(t.lines(), p, 'echo +Print');
 	assert.ok(y > p.y, 'echo hint row is shown in the panel');
 	await t.click(p.x + 3, y);
-	assert.equal(t.promptRow(40).text.slice(p.x).trimEnd(), '> echo');
+	assert.equal(t.promptRow(40).text.slice(p.x).trimEnd(), '❯ echo');
 	assert.deepEqual(ran, []);
 
 	await t.type(LONG);

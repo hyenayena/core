@@ -36,13 +36,13 @@ function setup(withView = false) {
 			.lastFrame()
 			.split('\n')
 			.map(l => l.replace(/^│ /, ''))
-			.filter(l => l.startsWith('> '))
+			.filter(l => l.startsWith('❯ '))
 			.at(-1) ?? '';
 	return {h, promptLine};
 }
 
 const assertClean = (line: string, expected: string) => {
-	assert.equal(line.trimEnd(), `> ${expected}`);
+	assert.equal(line.trimEnd(), `❯ ${expected}`);
 	assert.ok(!line.includes('[<') && !line.includes(';') && !line.includes('M'), line);
 };
 
@@ -84,7 +84,7 @@ test('bracketed paste still works', async () => {
 	await h.settle(60);
 	h.press(`${ESC}[200~hello world${ESC}[201~`);
 	await h.settle(80);
-	assert.equal(promptLine().trimEnd(), '> hello world');
+	assert.equal(promptLine().trimEnd(), '❯ hello world');
 	h.unmount();
 });
 

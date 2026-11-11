@@ -113,7 +113,7 @@ test('Ctrl+T toggles the console beside the chat and moves the focus with it', a
 	assert.match(frame, /Console/);
 	assert.match(frame, /CHAT\[\] idle w60/);
 	await type('abc');
-	assert.match(h.lastFrame(), /> abc/);
+	assert.match(h.lastFrame(), /❯ abc/);
 	assert.match(h.lastFrame(), /CHAT\[\]/);
 	await type('\x14');
 	frame = h.lastFrame();
@@ -171,7 +171,7 @@ test('the chat keeps running while the console is open and after it closes', asy
 	assert.match(h.lastFrame(), /CHAT/);
 	control().close();
 	await h.settle(60);
-	assert.match(h.lastFrame(), /^>\s*$/m);
+	assert.match(h.lastFrame(), /^❯\s*$/m);
 	h.unmount();
 });
 
@@ -304,7 +304,7 @@ test('settings without a chat runs full width and malformed tabs are dropped', a
 	assert.doesNotMatch(h.lastFrame(), /Bad/);
 	h.press(ESC);
 	await h.settle(60);
-	assert.match(h.lastFrame(), /^>\s*$/m);
+	assert.match(h.lastFrame(), /^❯\s*$/m);
 	h.unmount();
 });
 
@@ -387,7 +387,7 @@ test('§ and Ctrl+T toggle the console; Esc, t and \\ do not', async () => {
 		assert.doesNotMatch(h.lastFrame(), /Console/);
 	}
 	await type('\x14');
-	assert.match(h.lastFrame(), /Console · Tab close/);
+	assert.match(h.lastFrame(), /Console.*Tab close/);
 	await type('\x14');
 	assert.doesNotMatch(h.lastFrame(), /Console/);
 	h.unmount();
@@ -397,8 +397,8 @@ test('§ (sent for ⌘+§ and Ctrl+§) toggles the console and is never typed', 
 	const {h, type} = setup();
 	await h.settle(60);
 	await type('§');
-	assert.match(h.lastFrame(), /Console · Tab close/);
-	assert.doesNotMatch(h.lastFrame(), /> .*§/);
+	assert.match(h.lastFrame(), /Console.*Tab close/);
+	assert.doesNotMatch(h.lastFrame(), /❯ .*§/);
 	await type('§');
 	assert.doesNotMatch(h.lastFrame(), /Console/);
 	h.unmount();
@@ -461,10 +461,15 @@ test('titleBarText keeps the detail on the right and shortens the title first', 
 
 test('the title bar is olive by default, follows the Appearance colour, and is inverse without colours', async () => {
 	const {titleBarStyle} = await import('../src/components/TitleBar.js');
-	assert.deepEqual(titleBarStyle({}), {backgroundColor: '#808000', color: '#000000'});
-	assert.deepEqual(titleBarStyle({}, 'blue'), {backgroundColor: '#1f4e8c', color: '#ffffff'});
-	assert.deepEqual(titleBarStyle({}, 'inverse'), {inverse: true});
-	assert.deepEqual(titleBarStyle({NO_COLOR: '1'}), {inverse: true});
+	const {withColorDepth, inkTone} = await import('../src/kit/theme.js');
+	withColorDepth('truecolor', () => {
+		assert.deepEqual(titleBarStyle('olive'), {backgroundColor: '#808000', color: '#000000'});
+		assert.deepEqual(titleBarStyle('blue'), {backgroundColor: '#1f4e8c', color: '#ffffff'});
+		assert.deepEqual(titleBarStyle('inverse'), {inverse: true});
+		assert.deepEqual(titleBarStyle('olive', false), inkTone('frame'));
+		assert.equal(titleBarStyle('olive', false).backgroundColor, undefined);
+	});
+	withColorDepth('none', () => assert.deepEqual(titleBarStyle('olive'), {inverse: true}));
 });
 
 test('appearance prefs load, save and notify; broken files give the defaults', async () => {
@@ -534,7 +539,7 @@ test('Tab on an empty console line closes the console, Tab with hints completes;
 	const {h, type} = setup();
 	await h.settle(60);
 	await type('\x14');
-	assert.match(h.lastFrame(), /Console · Tab close/);
+	assert.match(h.lastFrame(), /Console.*Tab close/);
 	assert.match(h.lastFrame(), /CHAT\[\] idle/);
 	h.press('\x1b[1;2D');
 	await h.settle(60);
@@ -548,7 +553,7 @@ test('Tab on an empty console line closes the console, Tab with hints completes;
 	await type('hel');
 	await type('\t');
 	assert.match(h.lastFrame(), /Console/, 'Tab completed the hint instead');
-	assert.match(h.lastFrame(), /> help/);
+	assert.match(h.lastFrame(), /❯ help/);
 	await type('\x15');
 	await type('\t');
 	assert.doesNotMatch(h.lastFrame(), /Console/);
@@ -646,7 +651,7 @@ test('console rows beside a view keep the last terminal column empty, so the pro
 	await type('abc');
 	const frame = h.lastFrame();
 	assert.match(frame, /Error: Usage: claude auth/);
-	assert.match(frame, /> abc/);
+	assert.match(frame, /❯ abc/);
 	assert.ok(widestRow(frame) <= 99, `a row reaches the last column: ${widestRow(frame)}`);
 	h.unmount();
 });

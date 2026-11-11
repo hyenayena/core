@@ -91,7 +91,7 @@ test('hint rows of hostile docs stay clean and shorter than the terminal width',
 	for (const line of ['h', 'h ', 'h o', 'h ok ', 'h ok x ', 'h -', 'h --', 'h --a ', 'h loop ', 'h help ', 'h x y z -a ']) {
 		const hints = computeHints(hostile, line);
 		for (const columns of [8, 21, 40, 100]) {
-			for (const row of layoutHints(hints, {sel: 0, color: false}, {columns, rows: 24})) {
+			for (const row of layoutHints(hints, {sel: 0}, {columns, rows: 24})) {
 				const text = row.segments.map(s => s.text).join('');
 				assert.equal(CONTROL.test(text), false, `${line} @${columns}`);
 				assert.ok(stringCells(text) < columns, `${line} @${columns}: ${text}`);

@@ -672,3 +672,61 @@ test('an unclosed quote is invalid and never runs or asks', async () => {
 	assert.equal(asked, false);
 	assert.ok(s.records.every(x => !JSON.stringify(x).includes('a b')));
 });
+
+test('with a section the echo, output and failure go to it and the tee stays quiet', async () => {
+	const boom: Command = {name: 'boom', description: 'b', agent: 'safe', run: () => { throw new Error('exploded'); }};
+	const events: string[] = [];
+	const commands = [say('hello', 'safe', 'a'), boom];
+	const bridge = createCommandBridge({
+		find: name => commands.find(c => c.name === name),
+		catalog: () => buildCatalog(commands),
+		mode: () => 'policy',
+		tee: text => events.push(`tee:${text}`),
+		section: start => {
+			events.push(`open:${start.line}|${start.caller}`);
+			return {
+				tee: (text, tone) => events.push(`sec:${text}|${tone ?? ''}`),
+				end: (status, note) => events.push(`end:${status}|${note ?? ''}`),
+			};
+		},
+		clear: () => {},
+		exit: () => {},
+		log: fakeLogger().log,
+	});
+	await bridge.run({line: 'hello', caller: 'tester'});
+	assert.deepEqual(events, ['open:hello|tester', 'sec:a|', 'end:ok|']);
+	events.length = 0;
+	const failed = await bridge.run({line: 'boom', caller: 'tester'});
+	assert.equal(failed.status, 'error');
+	assert.deepEqual(events, ['open:boom|tester', 'sec:Error: exploded|error', 'end:failed|boom: error (exploded)']);
+	events.length = 0;
+	await bridge.run({line: 'nothing', caller: 'tester'});
+	assert.equal(events[0], 'open:nothing|tester');
+	assert.match(events.at(-1)!, /^end:failed\|command: unknown/);
+	assert.equal(events.some(e => e.startsWith('tee:')), false);
+});
+
+test('without a section the echo and the failure line are teed with tones', async () => {
+	const s = setup({commands: [say('hello', 'safe')]});
+	await run(s, 'hello');
+	assert.equal(s.tee[0]?.color, 'accent');
+	await run(s, 'nothing');
+	assert.equal(s.tee.at(-1)?.color, 'warn');
+});
+
+test('a section that cannot be opened falls back to the tee', async () => {
+	const commands = [say('hello', 'safe')];
+	const tee: string[] = [];
+	const bridge = createCommandBridge({
+		find: name => commands.find(c => c.name === name),
+		catalog: () => buildCatalog(commands),
+		mode: () => 'policy',
+		tee: text => tee.push(text),
+		section: () => undefined,
+		clear: () => {},
+		exit: () => {},
+		log: fakeLogger().log,
+	});
+	await bridge.run({line: 'hello', caller: 'tester'});
+	assert.deepEqual(tee, ['[tester] > hello', 'hi']);
+});

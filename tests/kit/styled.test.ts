@@ -127,7 +127,7 @@ test('the flex column is cut so rows fit the width, down to 8 cells', () => {
 	assert.match(strip(out), /…/);
 	assert.ok(out.includes(`${ESC}[1;36m[epic] ${ESC}[0m`));
 	const narrow = strip(renderStyled([table(rows, {flex: 1})], 10, {color: false}));
-	assert.match(narrow, /^id-1 {2}\[epic\] … {2}\/path/);
+	assert.equal(narrow, 'id-1\n  [epic] …\n  /path/t…');
 });
 
 test('with colours off only bold and dim remain', () => {
@@ -162,4 +162,34 @@ test('printStyled uses ctx.printStyled when present, else prints the plain form'
 	const got: unknown[] = [];
 	printStyled({print: () => assert.fail('plain'), printStyled: b => void got.push(b)}, blocks);
 	assert.deepEqual(got, [blocks]);
+});
+
+test('a table that still overflows after the flex shrink renders key/value rows', () => {
+	const rows = [
+		['TASK-1', 'A long description that does not fit', 'running'],
+		['TASK-2', '', 'done'],
+	];
+	const withHead = renderStyled([table(rows, {head: ['Id', 'Title', 'State'], flex: 1})], 20, {color: false});
+	assert.equal(strip(withHead), ['TASK-1', '  Title: A long des…', '  State: running', 'TASK-2', '  State: done'].join('\n'));
+	const noHead = renderStyled([table(rows, {flex: 1})], 20, {color: false});
+	assert.equal(strip(noHead), ['TASK-1', '  A long descriptio…', '  running', 'TASK-2', '  done'].join('\n'));
+	for (const width of [1, 2, 5, 10, 20]) {
+		for (const r of strip(renderStyled([table(rows, {head: ['Id', 'Title', 'State'], flex: 1})], width, {color: false})).split('\n')) {
+			assert.ok(stringCells(r) <= width, `${width}: ${r}`);
+		}
+	}
+});
+
+test('the first cell of a collapsed row is bold and the heads are muted', () => {
+	const out = renderStyled([table([['aaaa', 'bbbb']], {head: ['K', 'V'], flex: 1})], 9, {color: true}).split('\n');
+	assert.equal(out[0], `${ESC}[1maaaa${ESC}[0m`);
+	assert.equal(out[1], `${ESC}[2m  V: ${ESC}[0mbbbb`);
+});
+
+test('a table that fits renders as before and plainLines is unchanged', () => {
+	const rows = [['a', 'b'], ['cc', 'dd']];
+	const blocks = [table(rows, {head: ['X', 'Y'], flex: 1})];
+	assert.equal(strip(renderStyled(blocks, 40, {color: false})).split('\n')[0], 'X   Y');
+	assert.equal(strip(renderStyled(blocks, 40, {color: false})).split('\n').length, 4);
+	assert.deepEqual(plainLines([table([['TASK-1', 'a long description that is cut', 'x']], {flex: 1})]), ['TASK-1  a long description that is cut  x']);
 });

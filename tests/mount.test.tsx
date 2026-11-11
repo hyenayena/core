@@ -82,7 +82,7 @@ test('mount replaces the prompt with the element', async () => {
 	await h.settle();
 	await run('view');
 	assert.match(h.lastFrame(), /VIEW\[\]/);
-	assert.doesNotMatch(h.lastFrame(), /^> $/m);
+	assert.doesNotMatch(h.lastFrame(), /^❯ $/m);
 	h.unmount();
 });
 
@@ -92,12 +92,12 @@ test('typing is not echoed by the prompt while mounted and is again after close'
 	await run('view');
 	h.press('abc');
 	await h.settle();
-	assert.doesNotMatch(h.lastFrame(), /^> abc/m);
+	assert.doesNotMatch(h.lastFrame(), /^❯ abc/m);
 	h.press('\x1b');
 	await h.settle(60);
 	h.press('abc');
 	await h.settle();
-	assert.match(h.lastFrame(), /^> abc/m);
+	assert.match(h.lastFrame(), /^❯ abc/m);
 	h.unmount();
 });
 

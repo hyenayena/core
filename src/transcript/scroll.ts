@@ -1,11 +1,12 @@
 import type {PrintAction, RenderedPrint} from '../../../../src/api.js';
+import type {ThemeTone} from '../kit/theme.js';
 import {cleanActions} from './actions.js';
 import {wrapRows} from './wrap.js';
 
 export type Line = {
 	id: number;
 	text: string;
-	color?: string | undefined;
+	tone?: ThemeTone | undefined;
 	actions?: readonly PrintAction[] | undefined;
 	render?: ((width: number) => string | RenderedPrint) | undefined;
 };
@@ -38,7 +39,7 @@ export type Anchor = {id: number; hidden: number; of: number};
 
 export type RowsOf = (line: Line, width: number) => string[];
 
-export type VisibleRow = {key: string; id: number; row: number; text: string; color?: string | undefined};
+export type VisibleRow = {key: string; id: number; row: number; text: string; tone?: ThemeTone | undefined};
 
 type Position = {i: number; h: number};
 
@@ -126,7 +127,7 @@ export function visibleWindow(
 		const rows = rowsOf(line, width);
 		const end = j === i ? rows.length - h : rows.length;
 		for (let r = end - 1; r >= 0 && out.length < limit; r--) {
-			out.push({key: `${line.id}:${r}`, id: line.id, row: r, text: rows[r]!, color: line.color});
+			out.push({key: `${line.id}:${r}`, id: line.id, row: r, text: rows[r]!, tone: line.tone});
 		}
 	}
 	out.reverse();

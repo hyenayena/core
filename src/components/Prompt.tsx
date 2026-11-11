@@ -15,8 +15,10 @@ import {
 } from '../hints/editor.js';
 import {layoutHints, type HintRow} from '../hints/layout.js';
 import {indexAtCell, windowLine, type Windowed} from '../hints/viewport.js';
-import {c} from '../hints/style.js';
+import {promptSegments, syntaxRanges} from '../hints/syntax.js';
 import {graphemes, stringCells} from '../hints/width.js';
+import {asciiGlyphs, glyph} from '../kit/glyphs.js';
+import {inkTone} from '../kit/theme.js';
 import Hints from './Hints.js';
 import type {MouseInputEvent} from '../mouse/sgr.js';
 
@@ -78,7 +80,7 @@ function graphemeIndex(value: string, cursor: number): number {
 }
 
 export default function Prompt({
-	prompt = '> ',
+	prompt = `${glyph('prompt', {ascii: asciiGlyphs(process.env)})} `,
 	history,
 	catalog,
 	onSubmit,
@@ -130,13 +132,16 @@ export default function Prompt({
 
 	const hints = visibleHints(state, env);
 	const ghost = ghostText(state, env);
-	const hintRows = hints ? layoutHints(hints, {sel: state.sel}, {columns, rows}) : [];
 
 	const gs = graphemes(state.value);
 	const promptCells = graphemes(prompt).length;
 	const cursorIndex = graphemeIndex(state.value, state.cursor);
 	const win = windowLine(gs, cursorIndex, ghost, columns - 1 - promptCells);
-	const ghostCell = ghost !== '' && state.cursor >= state.value.length;
+	const wordIndex = graphemeIndex(state.value, hints?.tokenStart ?? 0);
+	const anchor =
+		promptCells + (wordIndex >= win.start ? (win.leftCut ? 1 : 0) + stringCells(gs.slice(win.start, wordIndex).join('')) : 0);
+	const hintRows = hints ? layoutHints(hints, {sel: state.sel, anchor}, {columns, rows}) : [];
+	const segments = promptSegments(state.value, win, syntaxRanges(state.value, catalog));
 
 	const rootRef = useRef<DOMElement>(null);
 	const rendered = useRef<Rendered | null>(null);
@@ -186,15 +191,17 @@ export default function Prompt({
 	return (
 		<Box ref={rootRef} flexDirection="column">
 			<Text wrap="truncate-end">
-				<Text color={c('cyan')} dimColor={!active}>
-					{prompt}
-				</Text>
-				{win.before}
-				<Text inverse={active} dimColor={ghostCell}>
-					{win.cursorCell || ' '}
-				</Text>
-				{win.after}
-				<Text dimColor>{win.ghost}</Text>
+				<Text {...inkTone(active ? 'focus' : 'frame')}>{prompt}</Text>
+				{segments.map((seg, i) => (
+					<Text
+						key={i}
+						{...(seg.ghost ? inkTone('muted') : seg.tone ? inkTone(seg.tone) : {})}
+						{...(seg.bold ? {bold: true} : {})}
+						{...(seg.cursor && active ? {inverse: true} : {})}
+					>
+						{seg.text}
+					</Text>
+				))}
 			</Text>
 			<Hints rows={hintRows} />
 		</Box>
