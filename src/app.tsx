@@ -23,7 +23,7 @@ import {buildCatalog, type CatalogSub} from './hints/catalog.js';
 import {sanitizeText} from './hints/sanitize.js';
 import {sliceStyledCells, styledCells} from './transcript/wrap.js';
 import {errorLines} from './error-lines.js';
-import {parseLine} from './parse-line.js';
+import {LineError, parseLine} from './parse-line.js';
 import {createCommandBridge, type AgentViewHandle} from './agent/bridge.js';
 import {unknownCommandLines} from './hints/typo.js';
 import {c} from './hints/style.js';
@@ -310,7 +310,13 @@ export default function App({
 	const makeHost = (target: MountTarget, mountId: number): ViewHost & ViewMouseHost & ViewCommandHost & ViewHeaderHost => ({
 		runLine: line => {
 			if (typeof line !== 'string' || line.length > RUN_LINE_MAX || /[\p{Cc}\p{Cf}]/u.test(line)) return false;
-			const parsed = parseLine(line);
+			let parsed: ReturnType<typeof parseLine>;
+			try {
+				parsed = parseLine(line);
+			} catch (error) {
+				if (error instanceof LineError) return false;
+				throw error;
+			}
 			if (!parsed || !registry.find(parsed.name)) return false;
 			const l = live.current;
 			if (l.side && !l.panelOpen) {
@@ -673,7 +679,15 @@ export default function App({
 			return;
 		}
 		printConsole(`> ${sanitizeText(raw, 4096)}`, c('gray'));
-		const parsed = parseLine(raw);
+		let parsed: ReturnType<typeof parseLine>;
+		try {
+			parsed = parseLine(raw);
+		} catch (error) {
+			if (!(error instanceof LineError)) throw error;
+			setHistory(prev => (prev.at(-1) === line ? prev : [...prev, line]));
+			errorLines(error).forEach((text, i) => printConsole(i === 0 ? `Error: ${text}` : `  ${text}`, c('red')));
+			return;
+		}
 		if (!parsed) return;
 		const {name, args} = parsed;
 

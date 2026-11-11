@@ -20,7 +20,7 @@ import {c} from '../hints/style.js';
 import {errorLines} from '../error-lines.js';
 import {createCapture} from './capture.js';
 import {normalizeStyled, plainLines, type NormalStyled} from '../kit/styled.js';
-import {parseLine} from '../parse-line.js';
+import {LineError, parseLine} from '../parse-line.js';
 import {isQuitLine} from '../view/keys.js';
 import type {AgentMode} from '../view/prefs.js';
 
@@ -161,7 +161,13 @@ export function createCommandBridge(deps: BridgeDeps): CommandBridge {
 			if (raw.trim() === '') return finish('invalid', '', 'the line is empty');
 			if (raw.length > MAX_LINE) return finish('invalid', '', `the line is longer than ${MAX_LINE} characters`);
 			if (hasUnsafeChars(raw)) return finish('invalid', '', 'the line contains control or formatting characters');
-			const parsed = parseLine(raw);
+			let parsed: ReturnType<typeof parseLine>;
+			try {
+				parsed = parseLine(raw);
+			} catch (error) {
+				if (!(error instanceof LineError)) throw error;
+				return finish('invalid', '', error.message.charAt(0).toLowerCase() + error.message.slice(1));
+			}
 			if (!parsed || isQuitLine(parsed.line)) return finish('invalid', '', 'the line is not a runnable command');
 
 			const catalog = deps.catalog();

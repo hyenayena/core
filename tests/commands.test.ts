@@ -48,7 +48,8 @@ test('help with a path prints that node; an unknown path throws', async () => {
 	await assert.rejects(async () => registry.find('help')!.run(['x', 'og'], ctxWith([])), /Unknown subcommand: og \(x\)\. Did you mean: go\?/);
 	const list: string[] = [];
 	await registry.find('help')!.run([], ctxWith(list));
-	assert.equal(list.at(-1), 'help <command> [subcommand…] shows details');
+	assert.equal(list.at(-2), 'help <command> [subcommand…] shows details');
+	assert.equal(list.at(-1), "Quote an argument that holds spaces: \"a b\" or 'a b'");
 });
 
 test('help goes to printStyled as line blocks when the context has it', async () => {

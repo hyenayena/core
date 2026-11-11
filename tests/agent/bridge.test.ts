@@ -633,3 +633,42 @@ test('SGR text printed by a command is stripped from the captured output', async
 	assert.equal(r.status, 'ok');
 	assert.equal(r.output, 'red');
 });
+
+test('quoted words are one argument; the policy is chosen from the parsed words, never re-split', async () => {
+	const seen: string[][] = [];
+	const cmd: Command = {
+		name: 'm',
+		description: 'm',
+		agent: 'safe',
+		run: (a, ctx) => {
+			seen.push(a);
+			ctx.print('ran');
+		},
+		subcommands: [{name: 'rm', aliases: [], usage: 'm rm', description: 'r', agent: 'deny'}],
+	};
+	const denied: Command = {name: 'd', description: 'd', agent: 'deny', run: () => void seen.push(['d'])};
+	const s = setup({commands: [cmd, denied]});
+	assert.equal((await run(s, '"d"')).status, 'denied');
+	assert.equal((await run(s, 'm "rm"')).status, 'denied');
+	assert.equal((await run(s, "m 'rm'")).status, 'denied');
+	assert.deepEqual(seen, []);
+	assert.equal((await run(s, 'm "rm x"')).status, 'ok');
+	assert.equal((await run(s, 'm --opt="a b" "c d"')).status, 'ok');
+	assert.deepEqual(seen, [['rm x'], ['--opt=a b', 'c d']]);
+});
+
+test('an unclosed quote is invalid and never runs or asks', async () => {
+	let ran = false;
+	let asked = false;
+	const cmd = {name: 'c', description: 'c', agent: 'confirm', run: () => { ran = true; }} as Command;
+	const s = setup({commands: [cmd]});
+	for (const line of ['c "a b', "c 'a", 'c "a b"c', '"c']) {
+		const r = await run(s, line, {confirm: async () => ((asked = true), true)});
+		assert.equal(r.status, 'invalid', line);
+		assert.match(r.reason ?? '', /^the line has an unclosed . quote$/);
+	}
+	assert.equal((await run(s, '""')).reason, 'the line has no command name');
+	assert.equal(ran, false);
+	assert.equal(asked, false);
+	assert.ok(s.records.every(x => !JSON.stringify(x).includes('a b')));
+});

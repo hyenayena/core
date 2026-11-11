@@ -7,7 +7,7 @@ import {walkPath} from './hints/path.js';
 import {sanitizeBlock} from './hints/sanitize.js';
 import {plainLines} from './kit/styled.js';
 import {unknownCommandLines} from './hints/typo.js';
-import {parseLine} from './parse-line.js';
+import {joinWords, LineError, parseLine} from './parse-line.js';
 import {getPrefs, loadPrefs} from './view/prefs.js';
 import {isQuitLine} from './view/keys.js';
 
@@ -23,11 +23,17 @@ const headless: HeadlessMain = async (yena, request) => {
 	}
 	loadPrefs(yena.dataDir);
 
-	const line = request.args.join(' ');
+	const line = joinWords(request.args);
 	if (line.trim() === '') throw fail('The command line is empty');
 	if (line.length > MAX_LINE) throw fail(`The command line is longer than ${MAX_LINE} characters`);
 	if (hasUnsafeChars(line)) throw fail('The command line contains control or formatting characters');
-	const parsed = parseLine(line);
+	let parsed: ReturnType<typeof parseLine>;
+	try {
+		parsed = parseLine(line);
+	} catch (err) {
+		if (err instanceof LineError) throw fail(err.message);
+		throw err;
+	}
 	if (!parsed || isQuitLine(parsed.line)) throw fail('The line is not a runnable command');
 
 	const command: Command | undefined = registry.find(parsed.name);

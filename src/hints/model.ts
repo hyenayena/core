@@ -1,6 +1,7 @@
 import type {Catalog, CatalogCommand, CatalogOption, CatalogSub} from './catalog.js';
 import {argLabel, optionLabel} from './help.js';
 import {rank} from './match.js';
+import {splitWords} from '../parse-line.js';
 import {graphemes} from './width.js';
 import {argState, parseUsage, slotKey, splitUsage, type UsageToken} from './usage.js';
 
@@ -35,21 +36,13 @@ export type HintResult = {
 const MAX_TOKENS = 64;
 const NONE: HintResult = {stage: 'none', tokenStart: 0, token: '', items: []};
 
-type Tok = {text: string; start: number; end: number};
+type Tok = {text: string; start: number; end: number; quoted: boolean};
 
 const isSpace = (ch: string) => /\s/u.test(ch);
 
-function tokenize(line: string): Tok[] {
-	const out: Tok[] = [];
-	let i = 0;
-	while (i < line.length && out.length < MAX_TOKENS) {
-		while (i < line.length && isSpace(line[i] as string)) i++;
-		if (i >= line.length) break;
-		const start = i;
-		while (i < line.length && !isSpace(line[i] as string)) i++;
-		out.push({text: line.slice(start, i), start, end: i});
-	}
-	return out;
+function tokenize(line: string): {toks: Tok[]; open: boolean} {
+	const {words, open} = splitWords(line, {partial: true});
+	return {toks: words.slice(0, MAX_TOKENS), open: open !== undefined};
 }
 
 export function isPrefixCI(token: string, insert: string): boolean {
@@ -142,14 +135,15 @@ export function computeHints(catalog: Catalog, line: string): HintResult {
 
 function analyse(catalog: Catalog, line: string): HintResult {
 	if (typeof line !== 'string' || line.trim() === '') return NONE;
-	const toks = tokenize(line);
-	const endsWithSpace = isSpace(line[line.length - 1] as string);
+	const {toks, open} = tokenize(line);
+	const endsWithSpace = !open && isSpace(line[line.length - 1] as string);
 	const complete = endsWithSpace ? toks : toks.slice(0, -1);
 	const cur: Tok = endsWithSpace
-		? {text: '', start: line.length, end: line.length}
+		? {text: '', start: line.length, end: line.length, quoted: false}
 		: (toks[toks.length - 1] as Tok);
 
 	if (complete.length === 0) {
+		if (cur.quoted) return NONE;
 		const items = itemsFor<CatalogCommand>(
 			cur.text,
 			catalog.commands,
@@ -182,7 +176,7 @@ function analyse(catalog: Catalog, line: string): HintResult {
 	const nodeUsage = (typed: string[] | undefined, pending?: {option?: string}) =>
 		buildUsage(node, path, typedPath, typed, endsWithSpace, pending);
 
-	if (!argsConsumed && subs.length > 0) {
+	if (!argsConsumed && subs.length > 0 && !cur.quoted) {
 		const items = itemsFor<CatalogSub>(
 			cur.text,
 			subs,
@@ -204,7 +198,7 @@ function analyse(catalog: Catalog, line: string): HintResult {
 	const pending: {option?: string} = {};
 	const usageLine = nodeUsage(typedArgs, pending);
 	const items =
-		cur.text.startsWith('-') && pending.option === undefined
+		!cur.quoted && cur.text.startsWith('-') && pending.option === undefined
 			? itemsFor<CatalogOption>(
 					cur.text,
 					node.options,

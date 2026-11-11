@@ -212,3 +212,23 @@ test('a pattern option (--<field>) claims a concrete option and skips its value'
 	const after = computeHints(own, 'acct --login bob ');
 	assert.equal(after.usage!.tokens[after.usage!.active]?.text, '<name>');
 });
+
+test('a quoted argument with spaces counts as one typed argument', () => {
+	const open = computeHints(catalog, 'doc ask "two words');
+	assert.equal(open.stage, 'arg');
+	assert.deepEqual(open.items, []);
+	assert.equal(open.usage!.tokens[open.usage!.active]?.text, '<text…>');
+	const closed = computeHints(catalog, 'doc ask "two words" ');
+	assert.equal(closed.stage, 'arg');
+	assert.equal(closed.tokenStart, 'doc ask "two words" '.length);
+	assert.equal(computeHints(catalog, 'doc ask "two words" --').stage, 'arg');
+});
+
+test('an open or quoted word offers no command, subcommand or option items', () => {
+	assert.equal(computeHints(catalog, '"ec').stage, 'none');
+	assert.equal(computeHints(catalog, '"echo"').stage, 'none');
+	assert.deepEqual(labels('mod "li'), []);
+	assert.deepEqual(labels('doc ask "--m'), []);
+	assert.deepEqual(labels('doc ask --model="a b'), []);
+	assert.equal(computeHints(catalog, 'mod "list" ').stage, 'arg');
+});

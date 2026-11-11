@@ -184,3 +184,30 @@ test('ui gallery prints the plain form: no escape sequences', async () => {
 	assert.match(out, /Theme/);
 	assert.ok(!out.includes('\x1b'));
 });
+
+test('arguments with spaces arrive as one word', async () => {
+	let seen: string[] = [];
+	const probe: Command = {name: 'probe', description: 'Probe', run: a => void (seen = a)};
+	const {error} = await capture(() => headless(yenaWith([probe]), {args: ['probe', 'a b', '--o=c d', '', "it's", '"q"']}));
+	assert.equal(error, undefined);
+	assert.deepEqual(seen, ['a b', '--o=c d', '', "it's", '"q"']);
+});
+
+test('an empty command name exits with code 2 and runs nothing', async () => {
+	let ran = false;
+	const probe: Command = {name: 'probe', description: 'Probe', run: () => void (ran = true)};
+	const {error, out} = await capture(() => headless(yenaWith([probe]), {args: ['', 'probe']}));
+	assert.equal(error?.exitCode, 2);
+	assert.equal(error!.message, 'The line has no command name');
+	assert.equal(ran, false);
+	assert.equal(out, '');
+});
+
+test('an unclosed quote in a single argument exits with code 2 and runs nothing', async () => {
+	let ran = false;
+	const probe: Command = {name: 'probe', description: 'Probe', run: () => void (ran = true)};
+	const {error, out} = await capture(() => headless(yenaWith([probe]), {args: ['probe "a b']}));
+	assert.equal(error?.exitCode, 2);
+	assert.equal(ran, false);
+	assert.equal(out, '');
+});

@@ -3,7 +3,7 @@ import {test} from 'node:test';
 import {COMMAND_TOOLS, formatCommandList, formatRunResult, resolveCommandLine} from '../../src/kit/text.js';
 import type {CommandInfo} from '../../../../src/api.js';
 
-const HINT = 'Arguments and options: help <command> [subcommand…]';
+const HINT = 'Arguments and options: help <command> [subcommand…]. Quote an argument that holds spaces: "a b" or \'a b\'.';
 
 test('tool specs are neutral JSON Schema', () => {
 	assert.equal(COMMAND_TOOLS.list_commands.name, 'list_commands');
@@ -92,4 +92,15 @@ test('resolveCommandLine walks names before aliases and takes the deepest listed
 	assert.equal(resolveCommandLine(nested, 'other'), undefined);
 	assert.equal(resolveCommandLine(nested, '   '), undefined);
 	assert.equal(resolveCommandLine(nested, 5 as never), undefined);
+});
+
+test('resolveCommandLine reads quoted words and refuses an unclosed quote', () => {
+	assert.deepEqual(resolveCommandLine(nested, '"claude" "auth" "status"'), {command: 'claude', subcommand: 'auth status', policy: 'safe'});
+	assert.deepEqual(resolveCommandLine(nested, 'claude "auth status"'), {command: 'claude', policy: 'confirm'});
+	assert.equal(resolveCommandLine(nested, 'claude "auth'), undefined);
+	assert.equal(resolveCommandLine(nested, '""'), undefined);
+});
+
+test('the run_command description tells to quote arguments with spaces', () => {
+	assert.match(COMMAND_TOOLS.run_command.description, /Quote an argument that holds spaces: "a b" or 'a b'\./);
 });

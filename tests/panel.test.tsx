@@ -579,6 +579,7 @@ test('a view can run a console line: it opens the console and runs it there; unk
 	});
 	assert.equal(host.runLine('nope x'), false);
 	assert.equal(host.runLine('say\u0007 x'), false);
+	assert.equal(host.runLine('say "unclosed'), false);
 	assert.doesNotMatch(h.lastFrame(), /Console/);
 	assert.equal(host.runLine('say hi there'), true);
 	await h.settle(60);

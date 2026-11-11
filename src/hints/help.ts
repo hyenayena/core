@@ -122,6 +122,7 @@ function helpRows(catalog: Catalog, path: readonly string[]): Row[] {
 		return [
 			...catalog.commands.map((c): Row => ['  ', accent(c.name), `${fill(c.name, w)} `, muted(c.description)]),
 			[muted('help <command> [subcommand…] shows details')],
+			[muted('Quote an argument that holds spaces: "a b" or \'a b\'')],
 		];
 	}
 	const r = resolve(catalog, p);

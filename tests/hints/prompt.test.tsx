@@ -280,3 +280,25 @@ test('Ctrl+C at the prompt still exits', async () => {
 	h.press('\x03');
 	await exited;
 });
+
+test('an unclosed quote prints an error, goes into the history and runs nothing', async () => {
+	let ran = 0;
+	const h = setup([{name: 'say', description: 'Say', run: () => void ran++}]);
+	await h.settle();
+	await submit(h, 'say "a b');
+	assert.match(h.lastFrame(), /Error: The line has an unclosed " quote/);
+	assert.equal(ran, 0);
+	h.press('\x1b[A');
+	await h.settle();
+	assert.match(h.lastFrame(), /^> say "a b/m);
+	h.unmount();
+});
+
+test('a quoted argument reaches the command as one word', async () => {
+	const seen: string[][] = [];
+	const h = setup([{name: 'say', description: 'Say', run: a => void seen.push(a)}]);
+	await h.settle();
+	await submit(h, 'say "a b" --x="c d" e');
+	assert.deepEqual(seen, [['a b', '--x=c d', 'e']]);
+	h.unmount();
+});

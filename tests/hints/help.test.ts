@@ -24,12 +24,13 @@ const cat = buildCatalog([
 
 test('help without arguments pads by cell width and points to the details', () => {
 	const lines = helpLines(cat);
-	assert.equal(lines.length, 5);
+	assert.equal(lines.length, 6);
 	assert.equal(lines[0], '  help     Show the list of commands');
 	assert.equal(lines[1], '  日本     wide name');
 	assert.equal(stringCells(lines[1]?.split('wide')[0] ?? ''), stringCells('  help     '));
 	assert.equal(lines[3], '  evil     x yz');
 	assert.equal(lines[4], 'help <command> [subcommand…] shows details');
+	assert.equal(lines[5], "Quote an argument that holds spaces: \"a b\" or 'a b'");
 });
 
 test('help for a command lists usage, description and subcommands, without the builtin help', () => {
@@ -125,7 +126,8 @@ test('the root list styles command names as accent and descriptions as muted', (
 		{text: 'help', tone: 'accent'},
 		{text: 'Show the list of commands', tone: 'muted'},
 	]);
-	assert.deepEqual(styledOf(blocks.at(-1)), [{text: 'help <command> [subcommand…] shows details', tone: 'muted'}]);
+	assert.deepEqual(styledOf(blocks.at(-2)), [{text: 'help <command> [subcommand…] shows details', tone: 'muted'}]);
+	assert.deepEqual(styledOf(blocks.at(-1)), [{text: "Quote an argument that holds spaces: \"a b\" or 'a b'", tone: 'muted'}]);
 });
 
 test('a node bolds its headings, accents the usage and subcommand labels and mutes descriptions', () => {

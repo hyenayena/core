@@ -1,5 +1,7 @@
 import type {AgentPolicy, CommandInfo, CommandInfoSub, CommandRunResult} from '../../../../src/api.js';
-import {parseLine} from '../parse-line.js';
+import {LineError, parseLine} from '../parse-line.js';
+
+const QUOTE_HINT = 'Quote an argument that holds spaces: "a b" or \'a b\'.';
 
 export type CommandToolSpec = {
 	name: string;
@@ -17,7 +19,7 @@ export const COMMAND_TOOLS: {list_commands: CommandToolSpec; run_command: Comman
 	run_command: {
 		name: 'run_command',
 		description:
-			'Run one yena console command line, for example "help" or "mod list", and return its output. Commands that need approval ask the user first.',
+			`Run one yena console command line, for example "help" or "mod list", and return its output. Commands that need approval ask the user first. ${QUOTE_HINT}`,
 		inputSchema: {
 			type: 'object',
 			properties: {command: {type: 'string', maxLength: 4096, description: 'The full command line, command name first'}},
@@ -69,7 +71,7 @@ export function formatCommandList(list: readonly CommandInfo[]): string {
 		if (closed > 0) denied.push(`${closed} ${cmd.name} subcommand${closed === 1 ? '' : 's'}`);
 	}
 	if (denied.length > 0) lines.push(`Not available to the assistant (the user runs them): ${denied.join(', ')}.`);
-	lines.push('Arguments and options: help <command> [subcommand…]');
+	lines.push(`Arguments and options: help <command> [subcommand…]. ${QUOTE_HINT}`);
 	return lines.join('\n');
 }
 
@@ -77,7 +79,13 @@ export type ResolvedCommandLine = {command: string; subcommand?: string; policy:
 
 export function resolveCommandLine(list: readonly CommandInfo[], line: string): ResolvedCommandLine | undefined {
 	if (typeof line !== 'string' || !Array.isArray(list)) return undefined;
-	const parsed = parseLine(line);
+	let parsed: ReturnType<typeof parseLine>;
+	try {
+		parsed = parseLine(line);
+	} catch (error) {
+		if (error instanceof LineError) return undefined;
+		throw error;
+	}
 	if (!parsed) return undefined;
 	const cmd = list.find(c => c.name === parsed.name);
 	if (!cmd) return undefined;
