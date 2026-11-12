@@ -1,6 +1,6 @@
 {
 	"name": "core",
-	"version": "0.22.5",
+	"version": "0.22.6",
 	"description": "Core module",
 	"runtime": "node",
 	"entry": "src/main.tsx",

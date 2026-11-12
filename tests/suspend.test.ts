@@ -50,3 +50,49 @@ test('suspend pauses mouse reporting before leaving and resumes it after returni
 	);
 	assert.deepEqual(order, ['raw:false', 'pause', 'leave', 'child', 'raw:true', 'return', 'resume']);
 });
+
+const eio = () => Object.assign(new Error('setRawMode EIO'), {code: 'EIO'});
+
+const terminal = (failOn: (mode: boolean) => boolean) => {
+	const stdin = Object.assign(new EventEmitter(), {isRaw: true, setRawMode(m: boolean) {
+		if (failOn(m)) throw eio();
+		this.isRaw = m;
+	}});
+	const reader = () => {};
+	stdin.on('readable', reader);
+	const writes: string[] = [];
+	const stdout = Object.assign(new EventEmitter(), {write: (s: string) => void writes.push(s)});
+	let resized = 0;
+	stdout.on('resize', () => resized++);
+	return {stdin, stdout, reader, writes, resized: () => resized};
+};
+
+test('an EIO when leaving raw mode keeps key reading and skips the child', async () => {
+	const t = terminal(m => !m);
+	let ran = false;
+	await assert.rejects(suspendTerminal(t.stdin as never, t.stdout as never, () => void (ran = true)), {code: 'EIO'});
+	assert.equal(ran, false);
+	assert.deepEqual(t.stdin.listeners('readable'), [t.reader]);
+	assert.deepEqual(t.writes, []);
+});
+
+test('an EIO when restoring raw mode still restores the screen, then fails', async () => {
+	const t = terminal(m => m);
+	const order: string[] = [];
+	const mouse = {pause: () => void order.push('pause'), resume: () => void order.push('resume')};
+	await assert.rejects(suspendTerminal(t.stdin as never, t.stdout as never, () => 42, mouse), {code: 'EIO'});
+	assert.deepEqual(t.stdin.listeners('readable'), [t.reader]);
+	assert.match(t.writes.at(-1)!, /\?1049h/);
+	assert.deepEqual(order, ['pause', 'resume']);
+	assert.equal(t.resized(), 1);
+});
+
+test('the child failure wins over a restore failure', async () => {
+	const t = terminal(m => m);
+	await assert.rejects(
+		suspendTerminal(t.stdin as never, t.stdout as never, () => Promise.reject(new Error('child failed'))),
+		/child failed/,
+	);
+	assert.deepEqual(t.stdin.listeners('readable'), [t.reader]);
+	assert.equal(t.resized(), 1);
+});

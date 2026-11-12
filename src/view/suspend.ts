@@ -20,16 +20,40 @@ export async function suspendTerminal<T>(
 	const readers = stdin.listeners('readable');
 	for (const r of readers) stdin.removeListener('readable', r);
 	const wasRaw = stdin.isRaw === true;
-	stdin.setRawMode?.(false);
-	mouse?.pause();
-	stdout.write(LEAVE);
 	try {
-		return await fn();
-	} finally {
-		stdin.setRawMode?.(wasRaw);
+		stdin.setRawMode?.(false);
+	} catch (error) {
 		for (const r of readers) stdin.on('readable', r);
-		stdout.write(RETURN);
-		mouse?.resume();
-		stdout.emit('resize');
+		throw error;
 	}
+	// Every restore step runs even when one fails (setRawMode can throw EIO once the tty is gone);
+	// the first failure is rethrown afterwards, unless the child already failed.
+	const restore = (): {error: unknown} | undefined => {
+		let failure: {error: unknown} | undefined;
+		const step = (run: () => unknown) => {
+			try {
+				run();
+			} catch (error) {
+				failure ??= {error};
+			}
+		};
+		step(() => stdin.setRawMode?.(wasRaw));
+		for (const r of readers) stdin.on('readable', r);
+		step(() => stdout.write(RETURN));
+		step(() => mouse?.resume());
+		step(() => stdout.emit('resize'));
+		return failure;
+	};
+	let result: T;
+	try {
+		mouse?.pause();
+		stdout.write(LEAVE);
+		result = await fn();
+	} catch (error) {
+		restore();
+		throw error;
+	}
+	const failure = restore();
+	if (failure) throw failure.error;
+	return result;
 }
