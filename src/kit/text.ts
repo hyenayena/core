@@ -7,6 +7,7 @@ export {windowStart} from './window.js';
 export {inputRowCount, inputWindow, offsetAtCell, type InputWindowRow} from './input-window.js';
 export {hangingRows} from './hanging.js';
 export {COMMAND_TOOLS, formatCommandList, formatRunResult, resolveCommandLine, type CommandToolSpec, type ResolvedCommandLine} from './agent.js';
+export {COMMAND_ERROR_KINDS, commandError, commandErrorKind, errorClass} from './command-error.js';
 export {splitWords, quoteWord, joinWords, LineError, type Word} from '../parse-line.js';
 export {checkCommandDocs} from '../hints/docs-lint.js';
 export {sanitizeStyled} from './styled-sanitize.js';

@@ -1,5 +1,6 @@
 import type {Command, CommandContext, HeadlessMain} from '../../../src/api.js';
 import {createCommandBridge, hasUnsafeChars, MAX_LINE} from './agent/bridge.js';
+import {errorLogFields} from './error-lines.js';
 import {createRegistry} from './commands.js';
 import {buildCatalog} from './hints/catalog.js';
 import {completionLines} from './hints/catalog-lines.js';
@@ -69,20 +70,21 @@ const headless: HeadlessMain = async (yena, request) => {
 	const catalogCommand = catalog().byName.get(parsed.name);
 	const subPath = catalogCommand ? walkPath(catalogCommand, parsed.args).path.map(s => s.name).join(' ') : '';
 	const started = Date.now();
-	const done = (status: 'ok' | 'error') => {
+	const done = (status: 'ok' | 'error', error?: unknown) => {
 		try {
 			yena.log.info('headless command', {
 				command: catalogCommand?.name ?? 'unknown',
 				...(subPath !== '' && {subcommand: subPath}),
 				status,
 				ms: Date.now() - started,
+				...(status === 'error' && errorLogFields(error)),
 			});
 		} catch {}
 	};
 	try {
 		await command.run(parsed.args, ctx);
 	} catch (error) {
-		done('error');
+		done('error', error);
 		throw error;
 	}
 	done('ok');

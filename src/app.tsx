@@ -25,7 +25,7 @@ import type {Registry} from './commands.js';
 import {buildCatalog, type CatalogSub} from './hints/catalog.js';
 import {sanitizeText} from './hints/sanitize.js';
 import {sliceStyledCells, styledCells} from './transcript/wrap.js';
-import {errorLines} from './error-lines.js';
+import {errorLines, errorLogFields, stackFrames} from './error-lines.js';
 import {LineError, parseLine} from './parse-line.js';
 import {createCommandBridge, type AgentViewHandle} from './agent/bridge.js';
 import {unknownCommandLines} from './hints/typo.js';
@@ -732,7 +732,12 @@ export default function App({
 			await command.run(args, makeCtx(print, styled));
 			return true;
 		} catch (error) {
-			log.warn('command failed', {command: name, err: error});
+			const fields = errorLogFields(error);
+			if (fields.kind === 'usage') log.info('command failed', {command: name, ...fields});
+			else {
+				const frames = stackFrames(error);
+				log.warn('command failed', {command: name, ...fields, ...(frames !== undefined && {stack: frames})});
+			}
 			errorLines(error).forEach((text, i) => print(i === 0 ? `Error: ${text}` : `  ${text}`, 'error'));
 			return false;
 		} finally {

@@ -5,6 +5,7 @@ import {buildCatalog, type Catalog} from './hints/catalog.js';
 import {helpBlocks, helpError, helpLines} from './hints/help.js';
 import {MAX_STYLED_BLOCKS, printStyled} from './kit/styled.js';
 import {helpTarget} from './hints/path.js';
+import {commandError} from './kit/command-error.js';
 import {noopLog} from './noop-log.js';
 import {createUiCommand} from './gallery/command.js';
 
@@ -74,7 +75,7 @@ export type Registry = {
 
 function printHelp(catalog: Catalog, path: readonly string[], ctx: CommandContext): void {
 	const problem = helpError(catalog, path);
-	if (problem !== undefined) throw new Error(problem);
+	if (problem !== undefined) throw commandError('usage', problem);
 	const blocks = helpBlocks(catalog, path);
 	if (blocks.length > MAX_STYLED_BLOCKS) ctx.print(helpLines(catalog, path).join('\n'));
 	else printStyled(ctx, blocks);

@@ -1,5 +1,6 @@
 import type {Command, CommandContext, Logger} from '../../../../src/api.js';
 import {sliceStyledCells, stripStyles} from '../transcript/wrap.js';
+import {commandError} from '../kit/command-error.js';
 import {loadGallery, renderGallery} from '../kit/gallery.js';
 import {asciiGlyphs} from '../kit/glyphs.js';
 import {COLOR_DEPTHS, colorDepth, paintTone, withColorDepth, type ColorDepth} from '../kit/theme.js';
@@ -23,23 +24,23 @@ function parseGallery(args: readonly string[]): Parsed {
 			const v = args[++i];
 			const n = Number(v);
 			if (v === undefined || !/^\d+$/.test(v) || n < MIN_WIDTH || n > MAX_WIDTH) {
-				throw new Error(`--width needs a number of columns from ${MIN_WIDTH} to ${MAX_WIDTH}. See "ui gallery help"`);
+				throw commandError('invalid', `--width needs a number of columns from ${MIN_WIDTH} to ${MAX_WIDTH}. See "ui gallery help"`);
 			}
 			out.width = n;
 		} else if (a === '--rows') {
 			const v = args[++i];
 			const n = Number(v);
 			if (v === undefined || !/^\d+$/.test(v) || n < MIN_ROWS || n > MAX_ROWS) {
-				throw new Error(`--rows needs a number of rows from ${MIN_ROWS} to ${MAX_ROWS}. See "ui gallery help"`);
+				throw commandError('invalid', `--rows needs a number of rows from ${MIN_ROWS} to ${MAX_ROWS}. See "ui gallery help"`);
 			}
 			out.rows = n;
 		} else if (a === '--depth') {
 			const v = args[++i];
 			if (v === undefined || !(COLOR_DEPTHS as readonly string[]).includes(v)) {
-				throw new Error(`--depth needs one of: ${COLOR_DEPTHS.join(', ')}. See "ui gallery help"`);
+				throw commandError('invalid', `--depth needs one of: ${COLOR_DEPTHS.join(', ')}. See "ui gallery help"`);
 			}
 			out.depth = v as ColorDepth;
-		} else if (a.startsWith('-')) throw new Error(`Unknown option: ${a.slice(0, 64)}. See "ui gallery help"`);
+		} else if (a.startsWith('-')) throw commandError('usage', `Unknown option: ${a.slice(0, 64)}. See "ui gallery help"`);
 		else out.sections.push(a);
 	}
 	return out;
@@ -96,7 +97,7 @@ export function createUiCommand(log: Logger): Command {
 				case 'gallery':
 					return gallery(rest, ctx, log);
 				default:
-					throw new Error(`Unknown subcommand: ${sub.slice(0, 64)}. See "ui help"`);
+					throw commandError('usage', `Unknown subcommand: ${sub.slice(0, 64)}. See "ui help"`);
 			}
 		},
 	};

@@ -5,6 +5,7 @@ import {createCommandBridge, type AgentViewHandle, type BridgeDeps, MAX_OUTPUT_C
 import {buildCatalog} from '../../src/hints/catalog.js';
 import {createRegistry} from '../../src/commands.js';
 import type {AgentMode} from '../../src/view/prefs.js';
+import {commandError} from '../../src/kit/command-error.js';
 import {fakeLogger} from '../testkit.js';
 
 type Setup = {commands?: Command[]; mode?: AgentMode; mountView?: BridgeDeps['mountView']; hooks?: Pick<BridgeDeps, 'beforeRun' | 'endRun'>; teeStyled?: BridgeDeps['teeStyled']};
@@ -356,6 +357,39 @@ test('log records carry metadata only: no line, args or output', async () => {
 	assert.equal(s.records[1]!.level, 'warn');
 	assert.equal(s.records[1]!.fields!['command'], undefined);
 	assert.equal(s.records[1]!.fields!['status'], 'unknown');
+});
+
+test('error records carry the error kind and class, never the message', async () => {
+	const throws = (name: string, make: () => Error): Command => ({name, description: name, agent: 'safe', run: () => { throw make(); }});
+	const s = setup({commands: [throws('plain', () => new Error('SECRET failure')), throws('typed', () => commandError('usage', 'SECRET usage'))]});
+	await run(s, 'plain SECRET-ARG');
+	await run(s, 'typed SECRET-ARG');
+	assert.doesNotMatch(JSON.stringify(s.records), /SECRET/);
+	const [plain, typed] = s.records;
+	assert.equal(plain!.level, 'warn');
+	assert.equal(plain!.fields!['status'], 'error');
+	assert.equal(plain!.fields!['kind'], 'failed');
+	assert.equal(plain!.fields!['errClass'], 'Error');
+	assert.equal(plain!.fields!['stack'], undefined);
+	assert.equal(typed!.level, 'info');
+	assert.equal(typed!.fields!['kind'], 'usage');
+});
+
+test('error records survive a hostile error and leak neither message nor stack lines', async () => {
+	const hostile = (): Error => {
+		const error = new Error('SECRET-MSG\n  at x (SECRET-FILE:1:1)');
+		Object.defineProperty(error, 'kind', {get() { throw new Error('SECRET-GETTER'); }});
+		Object.defineProperty(error, 'constructor', {get() { throw new Error('SECRET-CTOR'); }});
+		Object.defineProperty(error, 'code', {value: 'bad code SECRET'});
+		return error;
+	};
+	const s = setup({commands: [{name: 'hostile', description: 'x', agent: 'safe', run: () => { throw hostile(); }}]});
+	const result = await run(s, 'hostile SECRET-ARG');
+	assert.equal(result.status, 'error');
+	const rec = s.records.at(-1)!;
+	assert.equal(rec.fields!['kind'], 'failed');
+	assert.equal(rec.fields!['code'], undefined);
+	assert.doesNotMatch(JSON.stringify(s.records), /SECRET/);
 });
 
 function fakeViews(order: string[] = []) {

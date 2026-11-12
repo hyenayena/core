@@ -1,4 +1,5 @@
 import {sanitizeText} from '../hints/sanitize.js';
+import {commandError} from './command-error.js';
 import {sanitizeStyled} from './styled-sanitize.js';
 import {wrapRows} from '../transcript/wrap.js';
 import {SGR_ATTR, paintTone, withColorDepth, type ColorDepth} from './theme.js';
@@ -79,7 +80,7 @@ export async function loadGallery(names: readonly string[]): Promise<LoadedGalle
 			? all
 			: names.map(n => {
 					const s = all.find(x => x.name === n);
-					if (!s) throw new Error(`Unknown gallery section: ${sanitizeText(n, 40)}. Sections: ${all.map(x => x.name).join(', ')}`);
+					if (!s) throw commandError('not-found', `Unknown gallery section: ${sanitizeText(n, 40)}. Sections: ${all.map(x => x.name).join(', ')}`);
 					return s;
 				});
 	return Promise.all(chosen.map(loadOne));

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import React from 'react';
 import {Text} from 'ink';
 import App from '../src/app.js';
+import {commandError} from '../src/kit/command-error.js';
 import {createRegistry} from '../src/commands.js';
 import {fakeLogger, mountHarness} from './testkit.js';
 import type {Command} from '../../../src/api.js';
@@ -21,6 +22,22 @@ function setup() {
 			description: 'throws',
 			run: () => {
 				throw new Error('nope');
+			},
+		},
+		{
+			name: 'usage',
+			description: 'throws a usage error',
+			run: () => {
+				throw commandError('usage', 'wrong shape');
+			},
+		},
+		{
+			name: 'leak',
+			description: 'throws a message with a stack-like line',
+			run: () => {
+				const error = new Error('SECRET-MSG\n  at leak (SECRET-FILE.ts:1:1)\nSECRET-TAIL');
+				Object.defineProperty(error, 'kind', {get() { throw new Error('SECRET-GETTER'); }});
+				throw error;
 			},
 		},
 		{
@@ -53,6 +70,34 @@ test('a throwing command is logged at warn without its args', async () => {
 	assert.equal(rec?.fields?.command, 'fail');
 	assert.doesNotMatch(JSON.stringify(records, (_k, v) => (v instanceof Error ? v.message : v)), /sk-ant/);
 	assert.match(h.lastFrame(), /Error: nope/);
+	assert.equal(rec?.fields?.err, undefined);
+	assert.equal(rec?.fields?.kind, 'failed');
+	assert.equal(rec?.fields?.errClass, 'Error');
+	const stack = String(rec?.fields?.stack);
+	assert.match(stack, /^at /);
+	assert.doesNotMatch(stack, /nope/);
+	h.unmount();
+});
+
+test('a failing command logs no message, argument or stack-like message line', async () => {
+	const {h, run, records} = setup();
+	await h.settle();
+	await run('leak SECRET-ARG');
+	const rec = records.find(r => r.msg === 'command failed');
+	assert.equal(rec?.level, 'warn');
+	assert.equal(rec?.fields?.kind, 'failed');
+	assert.doesNotMatch(JSON.stringify(records, (_k, v) => (v instanceof Error ? v.message : v)), /SECRET/);
+	h.unmount();
+});
+
+test('a usage error is logged at info without a stack', async () => {
+	const {h, run, records} = setup();
+	await h.settle();
+	await run('usage');
+	const rec = records.find(r => r.msg === 'command failed');
+	assert.equal(rec?.level, 'info');
+	assert.equal(rec?.fields?.kind, 'usage');
+	assert.equal(rec?.fields?.stack, undefined);
 	h.unmount();
 });
 

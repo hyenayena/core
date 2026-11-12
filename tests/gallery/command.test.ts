@@ -29,7 +29,7 @@ test('ui alone shows the help, or the usage without showHelp', async () => {
 	const {ctx, prints} = ctxWith();
 	await c.run([], ctx);
 	assert.equal(prints[0]?.text, 'ui <subcommand>');
-	await assert.rejects(() => Promise.resolve(c.run(['nope'], ctx)), /Unknown subcommand: nope/);
+	await assert.rejects(() => Promise.resolve(c.run(['nope'], ctx)), (e: Error & {kind?: string}) => e.kind === 'usage' && /Unknown subcommand: nope/.test(e.message));
 });
 
 test('gallery validates its options', async () => {
@@ -38,7 +38,7 @@ test('gallery validates its options', async () => {
 	for (const args of [['gallery', '--width'], ['gallery', '--width', '10'], ['gallery', '--width', '501'], ['gallery', '--width', 'x'], ['gallery', '--depth', 'rgb'], ['gallery', '--depth'], ['gallery', '--bogus']]) {
 		await assert.rejects(() => Promise.resolve(c.run(args, ctx)), Error, args.join(' '));
 	}
-	await assert.rejects(() => Promise.resolve(c.run(['gallery', 'nope'], ctx)), /Unknown gallery section: nope/);
+	await assert.rejects(() => Promise.resolve(c.run(['gallery', 'nope'], ctx)), (e: Error & {kind?: string}) => e.kind === 'not-found' && /Unknown gallery section: nope/.test(e.message));
 });
 
 test('gallery prints a plain fallback and a render function laid out per width', async () => {

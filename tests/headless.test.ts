@@ -7,7 +7,8 @@ import {test} from 'node:test';
 import headless from '../src/headless.js';
 import type {Command, CommandContext, Logger, Yena} from '../../../src/api.js';
 
-const log: Logger = {error() {}, warn() {}, info() {}, debug() {}, child: () => log, addRedactor() {}};
+const logged: {msg: string; fields?: Record<string, unknown>}[] = [];
+const log: Logger = {error() {}, warn() {}, info: (msg, fields) => void logged.push({msg, fields}), debug() {}, child: () => log, addRedactor() {}};
 const yenaWith = (commands: Command[]): Yena => ({commands, dataDir: mkdtempSync(join(tmpdir(), 'core-headless-')), events: {} as never, log});
 
 async function capture(fn: () => Promise<void>): Promise<{out: string; error?: Error & {exitCode?: number}}> {
@@ -95,6 +96,10 @@ test('command errors are rethrown unchanged', async () => {
 	const boom = new Error('boom');
 	const {error} = await capture(() => headless(yenaWith([{name: 'boom', description: 'x', run() { throw boom; }}]), {args: ['boom']}));
 	assert.equal(error, boom);
+	const rec = logged.filter(r => r.msg === 'headless command').at(-1);
+	assert.equal(rec?.fields?.status, 'error');
+	assert.equal(rec?.fields?.kind, 'failed');
+	assert.equal(rec?.fields?.errClass, 'Error');
 });
 
 test('catalog prints only valid tab separated lines, runs no command and ignores args', async () => {
@@ -210,4 +215,13 @@ test('an unclosed quote in a single argument exits with code 2 and runs nothing'
 	assert.equal(error?.exitCode, 2);
 	assert.equal(ran, false);
 	assert.equal(out, '');
+});
+
+test('headless error records carry the kind and class, never the message', async () => {
+	const secret = Object.assign(new Error('SECRET-MSG\n  at x (SECRET-FILE:1:1)'), {kind: 'usage', code: 'bad code SECRET'});
+	await capture(() => headless(yenaWith([{name: 'leak', description: 'x', run() { throw secret; }}]), {args: ['leak', 'SECRET-ARG']}));
+	const rec = logged.filter(r => r.msg === 'headless command').at(-1);
+	assert.equal(rec?.fields?.kind, 'usage');
+	assert.equal(rec?.fields?.errClass, 'Error');
+	assert.doesNotMatch(JSON.stringify(rec), /SECRET/);
 });

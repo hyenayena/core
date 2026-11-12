@@ -45,7 +45,7 @@ test('help with a path prints that node; an unknown path throws', async () => {
 	const out: string[] = [];
 	await registry.find('help')!.run(['x', 'go'], ctxWith(out));
 	assert.deepEqual(out, ['Usage: x go', 'Go']);
-	await assert.rejects(async () => registry.find('help')!.run(['x', 'og'], ctxWith([])), /Unknown subcommand: og \(x\)\. Did you mean: go\?/);
+	await assert.rejects(async () => registry.find('help')!.run(['x', 'og'], ctxWith([])), (e: Error & {kind?: string}) => e.kind === 'usage' && /Unknown subcommand: og \(x\)\. Did you mean: go\?/.test(e.message));
 	const list: string[] = [];
 	await registry.find('help')!.run([], ctxWith(list));
 	assert.equal(list.at(-2), 'help <command> [subcommand…] shows details');

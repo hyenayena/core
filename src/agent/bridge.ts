@@ -16,7 +16,7 @@ import type {Catalog, CatalogCommand, CatalogSub} from '../hints/catalog.js';
 import {policyOf, walkPath} from '../hints/path.js';
 import {sanitizeBlock, sanitizeText, sanitizeToken} from '../hints/sanitize.js';
 import {unknownCommandLines} from '../hints/typo.js';
-import {errorLines} from '../error-lines.js';
+import {errorLines, errorLogFields} from '../error-lines.js';
 import {createCapture} from './capture.js';
 import {normalizeStyled, plainLines, type NormalStyled} from '../kit/styled.js';
 import type {ThemeTone} from '../kit/theme.js';
@@ -117,14 +117,15 @@ export function createCommandBridge(deps: BridgeDeps): CommandBridge {
 		let running = false;
 		let section: BridgeSection | undefined;
 
-		const finish = (status: CommandRunStatus, text = '', reason?: string): CommandRunResult => {
+		const finish = (status: CommandRunStatus, text = '', reason?: string, error?: unknown): CommandRunResult => {
 			outputChars = text.length;
 			const truncated = output.truncated;
 			const result: CommandRunResult = {status, output: text, truncated, ms: Math.max(0, now() - started)};
 			if (reason !== undefined) result.reason = reason;
 			if (status !== 'off') {
 				try {
-					deps.log[status === 'ok' ? 'info' : 'warn']('agent command', {
+					const fields = status === 'error' ? errorLogFields(error) : undefined;
+					deps.log[status === 'ok' || fields?.kind === 'usage' ? 'info' : 'warn']('agent command', {
 						caller,
 						...(meta.command !== undefined && {command: meta.command}),
 						...(meta.subcommand !== undefined && {subcommand: meta.subcommand}),
@@ -136,6 +137,7 @@ export function createCommandBridge(deps: BridgeDeps): CommandBridge {
 						truncated,
 						...(mounted && {mounted: true}),
 						...(viewForced && {viewForced: true}),
+						...fields,
 					});
 				} catch {}
 			}
@@ -306,11 +308,13 @@ export function createCommandBridge(deps: BridgeDeps): CommandBridge {
 			}
 
 			let failure: string[] | undefined;
+			let thrown: unknown;
 			const execution = Promise.resolve()
 				.then(() => command.run(parsed.args, ctx))
 				.then(
 					() => undefined,
 					(error: unknown) => {
+						thrown = error;
 						failure = errorLines(error);
 					},
 				)
@@ -336,11 +340,11 @@ export function createCommandBridge(deps: BridgeDeps): CommandBridge {
 				for (const text of shown) safeTee(text, 'error');
 				capture(shown.join('\n'));
 				capturing = false;
-				return finish('error', output.text(), failure[0]);
+				return finish('error', output.text(), failure[0], thrown);
 			}
 			return finish('ok', output.text());
 		} catch (error) {
-			return finish('error', '', sanitizeText(error instanceof Error ? error.message : String(error), 200));
+			return finish('error', '', sanitizeText(error instanceof Error ? error.message : String(error), 200), error);
 		}
 	};
 
