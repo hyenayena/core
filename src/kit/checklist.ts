@@ -137,8 +137,8 @@ export function checklistRows(o: ChecklistOptions): string[] {
 		for (const i of items) rows.push(clip(itemRow(i), width, ascii));
 		return rows;
 	}
-	const size = Math.max(1, budget - 1);
-	const start = windowStart(total, size, focus);
+	const size = budget - 1;
+	const start = size > 0 ? windowStart(total, size, focus) : 0;
 	for (const i of items.slice(start, start + size)) rows.push(clip(itemRow(i), width, ascii));
 	const hidden = total - size;
 	rows.push(clip(`${INDENT}${paint(`${glyph('ellipsis', {ascii})} +${hidden} more`, 'muted', depth)}`, width, ascii));

@@ -1,5 +1,6 @@
 import React, {useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode} from 'react';
 import {Box, Text, measureElement, useApp, useInput, useStdin, useStdout, useWindowSize, type DOMElement} from 'ink';
+import {COLUMN_BREAKPOINTS} from './kit/layout.js';
 import Prompt from './components/Prompt.js';
 import MountBoundary from './components/MountBoundary.js';
 import TitleBar from './components/TitleBar.js';
@@ -91,7 +92,7 @@ const ACTIVITY_SPIN_MS = 120;
 const MAX_TIMER_MS = 2 ** 31 - 1;
 export const MAX_LINES = 5000;
 const TITLE_MAX = 200;
-const SPLIT_MIN_COLUMNS = 60;
+const SPLIT_MIN_COLUMNS = COLUMN_BREAKPOINTS.normal;
 const MAX_MOUSE_LISTENERS = 8;
 const RUN_LINE_MAX = 4096;
 const MULTI_CLICK_MS = 400;

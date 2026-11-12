@@ -1,5 +1,6 @@
 import type {HintItem, HintResult, UsageLine} from './model.js';
 import {glyph} from '../kit/glyphs.js';
+import {rowTier} from '../kit/layout.js';
 import type {ThemeTone} from '../kit/theme.js';
 import {cellWidth, graphemes, stringCells, truncateCells} from './width.js';
 
@@ -34,7 +35,8 @@ export function rowBudget(rows: number, columns: number): {max: number} {
 	const r = Number.isFinite(rows) ? Math.floor(rows) : 24;
 	const c = Number.isFinite(columns) ? Math.floor(columns) : 80;
 	if (c < MIN_COLUMNS) return {max: 0};
-	const cap = r >= 17 ? 7 : r >= 11 ? 4 : 2;
+	const tier = rowTier(r);
+	const cap = tier === 'tiny' ? 2 : tier === 'short' ? 4 : 7;
 	return {max: Math.max(0, Math.min(cap, r - 2))};
 }
 

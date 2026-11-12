@@ -2,6 +2,7 @@ import {sanitizeBlock, sanitizeText} from '../hints/sanitize.js';
 import {cellWidth, graphemes, sliceCells, stringCells, truncateCells} from '../hints/width.js';
 import {sliceStyledCells, styledCells} from '../transcript/wrap.js';
 import {glyph, type GlyphName} from './glyphs.js';
+import {COLUMN_BREAKPOINTS} from './layout.js';
 import {SGR_ATTR, SGR_RESET, colorDepth, toneParams, type ColorDepth, type ThemeTone} from './theme.js';
 import {pairRuns, wordDiff, type Range} from './word-diff.js';
 
@@ -34,7 +35,7 @@ export type RenderOptions = {
 	right?: string;
 };
 
-export const SIDE_BY_SIDE_MIN_WIDTH = 159;
+export const SIDE_BY_SIDE_MIN_WIDTH = COLUMN_BREAKPOINTS.sideBySide - 1;
 const TWO_GUTTERS_MIN_WIDTH = 60;
 const HIGHLIGHT_MAX_LINES = 2000;
 const HIGHLIGHT_MAX_CHARS = 64 * 1024;

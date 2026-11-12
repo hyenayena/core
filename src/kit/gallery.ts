@@ -3,7 +3,7 @@ import {sanitizeStyled} from './styled-sanitize.js';
 import {wrapRows} from '../transcript/wrap.js';
 import {SGR_ATTR, paintTone, withColorDepth, type ColorDepth} from './theme.js';
 
-export type GalleryRenderOptions = {width: number; depth: ColorDepth; ascii: boolean};
+export type GalleryRenderOptions = {width: number; rows: number; depth: ColorDepth; ascii: boolean};
 
 export type GalleryRenderer = (options: GalleryRenderOptions) => readonly string[];
 
@@ -95,10 +95,11 @@ function rowsOf(lines: readonly string[], width: number): string[] {
 
 export function renderGallery(
 	loaded: readonly LoadedGallerySection[],
-	options: GalleryRenderOptions,
+	options: Omit<GalleryRenderOptions, 'rows'> & {rows?: number},
 	onError?: (section: string, err: unknown) => void,
 ): string[] {
 	const width = Math.max(1, Math.floor(options.width));
+	const rows = options.rows !== undefined && Number.isFinite(options.rows) ? Math.max(1, Math.floor(options.rows)) : 24;
 	return withColorDepth(options.depth, () => {
 		const out: string[] = [];
 		loaded.forEach(({section, renderer}, i) => {
@@ -106,7 +107,7 @@ export function renderGallery(
 			out.push(...rowsOf([`${SGR_ATTR.bold}${paintTone(section.title, 'accent')}`], width));
 			out.push(paintTone((options.ascii ? '-' : '─').repeat(width), 'frame'));
 			try {
-				out.push(...rowsOf(renderer({width, depth: options.depth, ascii: options.ascii}), width));
+				out.push(...rowsOf(renderer({width, rows, depth: options.depth, ascii: options.ascii}), width));
 			} catch (err) {
 				try {
 					onError?.(section.name, err);

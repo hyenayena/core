@@ -1,15 +1,18 @@
 import type {Command, CommandContext, Logger} from '../../../../src/api.js';
-import {stripStyles} from '../transcript/wrap.js';
+import {sliceStyledCells, stripStyles} from '../transcript/wrap.js';
 import {loadGallery, renderGallery} from '../kit/gallery.js';
 import {asciiGlyphs} from '../kit/glyphs.js';
-import {COLOR_DEPTHS, colorDepth, type ColorDepth} from '../kit/theme.js';
+import {COLOR_DEPTHS, colorDepth, paintTone, withColorDepth, type ColorDepth} from '../kit/theme.js';
 import {registerBuiltinSections} from './sections.js';
 
 const MIN_WIDTH = 20;
 const MAX_WIDTH = 500;
-const USAGE = 'ui gallery [section…] [--width <n>] [--depth <depth>] [--ascii]';
+const MIN_ROWS = 6;
+const MAX_ROWS = 200;
+const DEFAULT_ROWS = 24;
+const USAGE = 'ui gallery [section…] [--width <n>] [--rows <n>] [--depth <depth>] [--ascii]';
 
-type Parsed = {sections: string[]; width?: number; depth?: ColorDepth; ascii: boolean};
+type Parsed = {sections: string[]; width?: number; rows?: number; depth?: ColorDepth; ascii: boolean};
 
 function parseGallery(args: readonly string[]): Parsed {
 	const out: Parsed = {sections: [], ascii: false};
@@ -23,6 +26,13 @@ function parseGallery(args: readonly string[]): Parsed {
 				throw new Error(`--width needs a number of columns from ${MIN_WIDTH} to ${MAX_WIDTH}. See "ui gallery help"`);
 			}
 			out.width = n;
+		} else if (a === '--rows') {
+			const v = args[++i];
+			const n = Number(v);
+			if (v === undefined || !/^\d+$/.test(v) || n < MIN_ROWS || n > MAX_ROWS) {
+				throw new Error(`--rows needs a number of rows from ${MIN_ROWS} to ${MAX_ROWS}. See "ui gallery help"`);
+			}
+			out.rows = n;
 		} else if (a === '--depth') {
 			const v = args[++i];
 			if (v === undefined || !(COLOR_DEPTHS as readonly string[]).includes(v)) {
@@ -36,14 +46,21 @@ function parseGallery(args: readonly string[]): Parsed {
 }
 
 async function gallery(args: readonly string[], ctx: CommandContext, log: Logger): Promise<void> {
-	const {sections, width, depth, ascii} = parseGallery(args);
+	const {sections, width, rows, depth, ascii} = parseGallery(args);
 	const started = Date.now();
 	const loaded = await loadGallery(sections);
 	const useAscii = ascii || asciiGlyphs(process.env);
 	const onError = (section: string, err: unknown) => log.warn('gallery section failed', {section, err});
-	const plain = stripStyles(renderGallery(loaded, {width: (width ?? 80) - 1, depth: 'none', ascii: useAscii}, onError).join('\n'));
+	const plain = stripStyles(renderGallery(loaded, {width: (width ?? 80) - 1, rows: rows ?? DEFAULT_ROWS, depth: 'none', ascii: useAscii}, onError).join('\n'));
 	ctx.print(plain, {
-		render: w => renderGallery(loaded, {width: width !== undefined ? width - 1 : w, depth: depth ?? colorDepth(), ascii: useAscii}).join('\n'),
+		render: w => {
+			const laidOut = width !== undefined ? width - 1 : w;
+			const d = depth ?? colorDepth();
+			const out = renderGallery(loaded, {width: laidOut, rows: rows ?? DEFAULT_ROWS, depth: d, ascii: useAscii});
+			if (laidOut <= w) return out.join('\n');
+			const note = withColorDepth(d, () => paintTone(`laid out for ${width} columns, cut to ${w}`, 'muted'));
+			return [...out.map(row => sliceStyledCells(row, 0, w)), sliceStyledCells(note, 0, w)].join('\n');
+		},
 	});
 	log.debug('gallery', {sections: loaded.map(l => l.section.name), ms: Date.now() - started});
 }
@@ -64,10 +81,11 @@ export function createUiCommand(log: Logger): Command {
 				args: [{name: 'section', description: 'Section to show; none shows all'}],
 				options: [
 					{name: '--width', value: '<n>', description: 'Terminal columns to lay out for, 20 to 500'},
+					{name: '--rows', value: '<n>', description: 'Terminal rows to lay out for, 6 to 200'},
 					{name: '--depth', value: '<depth>', description: 'truecolor, 256, 16 or none; default: detected'},
 					{name: '--ascii', description: 'Use the ASCII fallbacks of the glyphs'},
 				],
-				notes: ['Built-in sections: theme, glyphs.', 'Modules add their own sections.'],
+				notes: ['Built-in sections: theme, glyphs, console.', 'Modules add their own sections.'],
 			},
 		],
 		async run(args, ctx) {

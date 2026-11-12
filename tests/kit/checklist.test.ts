@@ -117,3 +117,14 @@ test('hostile text is scrubbed', () => {
 test('empty list gives the header only', () => {
 	withColorDepth('none', () => assert.deepEqual(run({items: [], mode: 'full'}), ['☰ Plan 0/0']));
 });
+
+test('full mode never returns more rows than maxRows', () => {
+	for (let total = 1; total <= 8; total++) {
+		const items: ChecklistItem[] = Array.from({length: total}, (_, i) => ({text: `Step ${i}`, state: i === 2 ? 'active' : 'open'}));
+		for (let maxRows = 1; maxRows <= 6; maxRows++) {
+			const rows = checklistRows({title: 'Plan', items, width: 40, mode: 'full', maxRows});
+			assert.ok(rows.length <= maxRows, `${total} items, maxRows ${maxRows}: ${rows.length}`);
+			if (total >= maxRows && maxRows >= 2) assert.match(stripStyles(rows.at(-1)!), /\+\d+ more/, `${total}/${maxRows}`);
+		}
+	}
+});

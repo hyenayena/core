@@ -61,7 +61,7 @@ function rowsOf(entry: PanelEntry, width: number): string[] {
 	return wrapRows(out === undefined ? entry.text : typeof out === 'string' ? out : out.text, width);
 }
 
-export const consoleRenderer: GalleryRenderer = ({width, depth, ascii}) => {
+export const consoleRenderer: GalleryRenderer = ({width, rows: termRows, depth, ascii}) => {
 	const inner = Math.max(1, width - 2);
 	const frame = paintTone(glyph('vRule', {ascii}), 'frame', depth);
 	const fit = (text: string): string => (styledCells(text) <= inner ? text : sliceStyledCells(text, 0, inner));
@@ -96,7 +96,7 @@ export const consoleRenderer: GalleryRenderer = ({width, depth, ascii}) => {
 		...sectionRows(sections(), rowsOf, {width: inner, depth, ascii, now: NOW + 20_000}).map(r => r.text),
 		promptLine('dev test core --file x'),
 		promptLine('dev '),
-		...layoutHints(computeHints(catalog, 'dev '), {sel: 1, anchor: 2 + stringCells('dev ')}, {columns: inner, rows: 24}).map(row =>
+		...layoutHints(computeHints(catalog, 'dev '), {sel: 1, anchor: 2 + stringCells('dev ')}, {columns: inner, rows: termRows}).map(row =>
 			paintSegments(row.segments, depth),
 		),
 	];

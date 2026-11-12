@@ -27,7 +27,7 @@ const kinds = (rows: HintRow[]) => rows.map(r => r.kind);
 
 test('row budget table', () => {
 	const table: Array<[number, number]> = [
-		[24, 7], [17, 7], [16, 4], [11, 4], [10, 2], [4, 2], [3, 1], [2, 0], [1, 0], [0, 0],
+		[24, 7], [17, 7], [16, 4], [11, 2], [10, 2], [4, 2], [3, 1], [2, 0], [1, 0], [0, 0],
 	];
 	for (const [rows, max] of table) assert.equal(rowBudget(rows, 80).max, max, `rows=${rows}`);
 	assert.equal(rowBudget(24, 7).max, 0);

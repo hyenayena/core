@@ -119,6 +119,20 @@ export {
 } from './theme.js';
 export {GLYPHS, SPINNER_GLYPHS, glyph, spinnerFrames, asciiGlyphs, type GlyphDef, type GlyphName, type SpinnerGlyphName} from './glyphs.js';
 export {
+	COLUMN_BREAKPOINTS,
+	ROW_BREAKPOINTS,
+	FIXED_SHARE,
+	columnTier,
+	rowTier,
+	liveRowCap,
+	fixedRowBudget,
+	allocateRows,
+	type ColumnTier,
+	type RowTier,
+	type RowPart,
+	type RowAllocation,
+} from './layout.js';
+export {
 	registerGallerySection,
 	gallerySections,
 	type GallerySection,

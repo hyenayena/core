@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {
+	COLUMN_BREAKPOINTS,
 	SIDE_BY_SIDE_MIN_WIDTH,
 	fileKindGlyph,
 	prepareDiffCard,
@@ -282,4 +283,8 @@ test('header right: right-aligned and muted, dropped when the row is narrow, nev
 	assert.ok(!narrow.includes('2.1s'), narrow);
 	const hostile = stripStyles(render(edit, 80, 'none', {right: `1s${ESC}]0;x\u0007\u0001`})[0]!);
 	assert.ok(!/[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/.test(hostile));
+});
+
+test('the side-by-side threshold follows the column breakpoint', () => {
+	assert.equal(SIDE_BY_SIDE_MIN_WIDTH, COLUMN_BREAKPOINTS.sideBySide - 1);
 });
