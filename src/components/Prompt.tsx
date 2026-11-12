@@ -1,5 +1,6 @@
 import React, {useEffect, useMemo, useRef, useState} from 'react';
-import {Box, Text, measureElement, useInput, usePaste, useWindowSize, type DOMElement, type Key} from 'ink';
+import {Box, Text, measureElement, useInput, usePaste, type DOMElement, type Key} from 'ink';
+import {useTerminalSize} from '../kit/terminal-size.js';
 import type {Catalog} from '../hints/catalog.js';
 import {computeHints} from '../hints/model.js';
 import {
@@ -96,7 +97,7 @@ export default function Prompt({
 	const [state, setState] = useState<PromptState>(initialState);
 	const historyRef = useRef(history);
 	historyRef.current = history;
-	const terminal = useWindowSize();
+	const terminal = useTerminalSize();
 	const columns = size.columns ?? terminal.columns;
 	const rows = size.rows ?? terminal.rows;
 

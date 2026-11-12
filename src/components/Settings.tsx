@@ -1,5 +1,6 @@
 import React, {useEffect, useRef, useState} from 'react';
-import {Box, Text, useInput, useWindowSize} from 'ink';
+import {Box, Text, useInput} from 'ink';
+import {useTerminalSize} from '../kit/terminal-size.js';
 import type {MountControl, Setting, SettingAction, SettingsTab} from '../../../../src/api.js';
 import {sanitizeText} from '../hints/sanitize.js';
 import {c} from '../hints/style.js';
@@ -113,7 +114,7 @@ export default function Settings({tabs: initial, control, reload}: {tabs: Settin
 	const [tabs, setTabs] = useState(initial);
 	const [opened, setOpened] = useState<Opened | null>(null);
 	const {focused, columns} = useViewHost(control.host);
-	const terminal = useWindowSize();
+	const terminal = useTerminalSize();
 	const height = control.host?.rows?.() ?? terminal.rows - 1;
 	const [tab, setTab] = useState(0);
 	const [cursor, setCursor] = useState(0);

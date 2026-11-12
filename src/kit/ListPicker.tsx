@@ -1,5 +1,6 @@
 import React, {useState} from 'react';
-import {Box, Text, useInput, useWindowSize} from 'ink';
+import {Box, Text, useInput} from 'ink';
+import {useTerminalSize} from './terminal-size.js';
 import type {ViewHost} from '../../../../src/api.js';
 import {sanitizeText} from '../hints/sanitize.js';
 import {stringCells, truncateCells} from '../hints/width.js';
@@ -22,7 +23,7 @@ export interface ListPickerProps {
 const identity = (s: string) => s;
 
 export function ListPicker({title, empty, action, items, scrub = identity, onPick, close, host}: ListPickerProps) {
-	const terminal = useWindowSize();
+	const terminal = useTerminalSize();
 	const {focused, columns} = useViewHost(host);
 	const rows = host?.rows?.() ?? terminal.rows - 1;
 	const [cursor, setCursor] = useState(0);

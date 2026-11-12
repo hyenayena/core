@@ -1,13 +1,13 @@
 import {createContext, useContext, useEffect, useState} from 'react';
-import {useWindowSize} from 'ink';
 import type {ViewHost} from '../../../../src/api.js';
+import {useTerminalSize} from '../kit/terminal-size.js';
 
 export type ViewLayout = {focused: boolean; columns: number};
 
 export const ViewLayoutContext = createContext<ViewLayout | undefined>(undefined);
 
 export function useViewHost(host: ViewHost | undefined): ViewLayout {
-	const {columns} = useWindowSize();
+	const {columns} = useTerminalSize();
 	const read = (): ViewLayout => (host ? {focused: host.isFocused(), columns: host.columns()} : {focused: true, columns});
 	const provided = useContext(ViewLayoutContext);
 	const [layout, setLayout] = useState(read);

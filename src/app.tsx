@@ -1,5 +1,6 @@
 import React, {useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode} from 'react';
-import {Box, Text, measureElement, useApp, useInput, useStdin, useStdout, useWindowSize, type DOMElement} from 'ink';
+import {Box, Text, measureElement, useApp, useInput, useStdin, useStdout, type DOMElement} from 'ink';
+import {useTerminalSize} from './kit/terminal-size.js';
 import {COLUMN_BREAKPOINTS} from './kit/layout.js';
 import Prompt from './components/Prompt.js';
 import MountBoundary from './components/MountBoundary.js';
@@ -179,7 +180,7 @@ export default function App({
 		mouse.setWanted(mouseWanted);
 		return () => mouse.setWanted(false);
 	}, [mouse, mouseWanted]);
-	const {columns, rows} = useWindowSize();
+	const {columns, rows} = useTerminalSize();
 	const [lines, setLines] = useState<Line[]>(() => [
 		{
 			id: nextId++,

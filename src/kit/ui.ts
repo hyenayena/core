@@ -1,3 +1,4 @@
+export {useTerminalSize, type TerminalSize} from './terminal-size.js';
 export {useViewHost, type ViewLayout} from '../view/use-view-host.js';
 export {Spinner, useSpinnerFrame, SPINNERS} from './Spinner.js';
 export {ListPicker, type ListPickerProps} from './ListPicker.js';
