@@ -1,8 +1,11 @@
 {
 	"name": "core",
-	"version": "0.22.6",
+	"version": "0.22.7",
 	"description": "Core module",
 	"runtime": "node",
 	"entry": "src/main.tsx",
-	"headless": "src/headless.ts"
+	"headless": "src/headless.ts",
+	"export": {
+		"deny": ["exports", "backups"]
+	}
 }

@@ -8,6 +8,7 @@ import {helpTarget} from './hints/path.js';
 import {commandError} from './kit/command-error.js';
 import {noopLog} from './noop-log.js';
 import {createUiCommand} from './gallery/command.js';
+import {createTransferCommands, type TransferDeps} from './transfer/commands.js';
 
 const LABEL: Record<TitleBarColor, string> = {olive: 'Olive', blue: 'Blue', teal: 'Teal', gray: 'Gray', inverse: 'Inverse'};
 
@@ -81,7 +82,7 @@ function printHelp(catalog: Catalog, path: readonly string[], ctx: CommandContex
 	else printStyled(ctx, blocks);
 }
 
-export function createRegistry(extra: Command[], log: Logger = noopLog): Registry {
+export function createRegistry(extra: Command[], log: Logger = noopLog, options: {transfer?: TransferDeps} = {}): Registry {
 	const commands: Command[] = [
 		{
 			name: 'help',
@@ -104,6 +105,7 @@ export function createRegistry(extra: Command[], log: Logger = noopLog): Registr
 		},
 		createUiCommand(log),
 		...extra,
+		...(options.transfer ? createTransferCommands(options.transfer) : []),
 		{
 			name: 'settings',
 			description: 'Open the settings',

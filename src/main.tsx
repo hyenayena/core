@@ -11,7 +11,7 @@ import {createMouseTerminal} from './mouse/terminal.js';
 const main: ModuleMain = yena => {
 	setTerminalTitle(process.stdout, APP_TITLE);
 	loadPrefs(yena.dataDir);
-	const registry = createRegistry(yena.commands, yena.log);
+	const registry = createRegistry(yena.commands, yena.log, {transfer: {modules: yena.modules, build: yena.build, dataDir: yena.dataDir, log: yena.log}});
 	const proxy = process.stdin.isTTY ? createInputProxy(process.stdin) : undefined;
 	const mouse = proxy ? createMouseTerminal(process.stdout, proxy) : undefined;
 	if (mouse) process.once('exit', () => mouse.shutdown());
