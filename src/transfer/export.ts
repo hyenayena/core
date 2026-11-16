@@ -121,7 +121,7 @@ async function save(env: TransferEnv, target: string | undefined, ext: string, c
 	}
 	const dir = exportsDir(env.dataDir);
 	await mkdir(dir, {recursive: true, mode: 0o700});
-	const base = `yena-export-${utcStamp(env.now())}`;
+	const base = `yena-${utcStamp(env.now())}`;
 	for (let n = 1; n <= 99; n++) {
 		const file = path.join(dir, `${base}${n === 1 ? '' : `-${n}`}${ext}`);
 		try {
@@ -180,7 +180,7 @@ export async function runExport(args: string[], ctx: CommandContext, env: Transf
 			return;
 		}
 
-		const file = await save(env, parsed.file, secret ? '.tar.gz.enc' : '.tar.gz', content);
+		const file = await save(env, parsed.file, '.yna', content);
 		const encryption = secret ? (secret.kind === 'code' ? 'code' : 'password') : 'none';
 		const blocks: StyledBlock[] = [];
 		if (packed.cells.length > 0) blocks.push(table(packed.cells, {head: ['Module', 'Version', 'Files', 'Skipped', 'Size', 'Code']}));

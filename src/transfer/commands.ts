@@ -53,7 +53,7 @@ export function createTransferCommands(deps: TransferDeps): Command[] {
 			name: 'export',
 			description: 'Save the modules, their versions and their data to one file',
 			usage: 'export [file] [--no-encrypt]',
-			args: [{name: 'file', description: 'Where to save it; default core/exports/yena-export-<time>.tar.gz.enc'}],
+			args: [{name: 'file', description: 'Where to save it; default core/exports/yena-<time>.yna'}],
 			options: [{name: '--no-encrypt', description: 'Write the file without encryption (unsafe)'}],
 			notes: [
 				'The file is encrypted with a password you type, or a code word shown once.',

@@ -154,7 +154,7 @@ test('usage errors', async () => {
 test('an encrypted export gets the default name, mode 0600, and opens with the password', async () => {
 	const t = await setup();
 	await t.run('export');
-	const name = 'yena-export-2026-11-16-10-00.tar.gz.enc';
+	const name = 'yena-2026-11-16-10-00.yna';
 	assert.deepEqual(await exportsOf(t.dataDir), [name]);
 	const target = path.join(t.dataDir, 'exports', name);
 	assert.equal((await stat(target)).mode & 0o777, 0o600);
@@ -171,16 +171,16 @@ test('an encrypted export gets the default name, mode 0600, and opens with the p
 	assert.match(text(t), /priv has no export list in its yena\.json: its 3 files were not exported/);
 	assert.match(text(t), /md: 1 links skipped/);
 	assert.match(text(t), /Encrypted with the password you typed/);
-	assert.match(text(t), /Saved .*yena-export-2026-11-16-10-00\.tar\.gz\.enc \(.*, 4 files from 3 modules\)/);
+	assert.match(text(t), /Saved .*yena-2026-11-16-10-00\.yna \(.*, 4 files from 3 modules\)/);
 	await t.run('export');
-	assert.deepEqual((await exportsOf(t.dataDir)).sort(), ['yena-export-2026-11-16-10-00-2.tar.gz.enc', name]);
+	assert.deepEqual((await exportsOf(t.dataDir)).sort(), ['yena-2026-11-16-10-00-2.yna', name]);
 });
 
 test('an explicit path is never overwritten; relative paths start in exports', async () => {
 	const t = await setup();
-	await t.run('export', 'mine.tar.gz.enc');
-	assert.deepEqual(await exportsOf(t.dataDir), ['mine.tar.gz.enc']);
-	await assert.rejects(t.run('export', 'mine.tar.gz.enc'), (e: Error) => commandErrorKind(e) === 'invalid' && /already exists/.test(e.message));
+	await t.run('export', 'mine.yna');
+	assert.deepEqual(await exportsOf(t.dataDir), ['mine.yna']);
+	await assert.rejects(t.run('export', 'mine.yna'), (e: Error) => commandErrorKind(e) === 'invalid' && /already exists/.test(e.message));
 	const abs = path.join(t.dataDir, 'elsewhere', 'x.enc');
 	await t.run('export', abs);
 	assert.equal((await stat(abs)).isFile(), true);
@@ -189,8 +189,8 @@ test('an explicit path is never overwritten; relative paths start in exports', a
 test('--no-encrypt writes a gzip file and the unsafe warning, without asking for a password', async () => {
 	const t = await setup();
 	await t.run('export', '--no-encrypt');
-	assert.deepEqual(await exportsOf(t.dataDir), ['yena-export-2026-11-16-10-00.tar.gz']);
-	assert.equal(isGzip(await readFile(path.join(t.dataDir, 'exports', 'yena-export-2026-11-16-10-00.tar.gz'))), true);
+	assert.deepEqual(await exportsOf(t.dataDir), ['yena-2026-11-16-10-00.yna']);
+	assert.equal(isGzip(await readFile(path.join(t.dataDir, 'exports', 'yena-2026-11-16-10-00.yna'))), true);
 	assert.match(text(t), /Unsafe: the file is not encrypted/);
 	assert.deepEqual(t.prompts.calls, []);
 });
