@@ -12,6 +12,8 @@ import type {Command, MountControl, Setting} from '../../../src/api.js';
 
 const LEFT = '\x1b[D';
 const RIGHT = '\x1b[C';
+const SHIFT_LEFT = '\x1b[1;2D';
+const SHIFT_RIGHT = '\x1b[1;2C';
 const ENTER = '\r';
 const ESC = '\x1b';
 const DOWN = '\x1b[B';
@@ -32,7 +34,6 @@ function Chat({control}: {control: MountControl}) {
 	useInput(
 		(input, key) => {
 			if (host.isHostKey(input, key)) return;
-			if (key.rightArrow && typed === '') return void host.move('right');
 			setTyped(t => t + input);
 		},
 		{isActive: focused},
@@ -72,6 +73,8 @@ test('an autostarted main view takes the screen and the focus; the console is cl
 	assert.match(frame, /CHAT\[\] focused w100/);
 	assert.doesNotMatch(frame, /Console/);
 	assert.match(h.allOutput(), /press Tab \(or Ctrl\+T\) to open the console/);
+	assert.match(h.allOutput(), /Shift\+← \/ Shift\+→ move the focus/);
+	assert.match(h.allOutput(), /"help" lists the commands/);
 	assert.doesNotMatch(frame, /chat-opened/, 'output before the chat opened is cleared');
 	h.unmount();
 });
@@ -122,30 +125,32 @@ test('Ctrl+T toggles the console beside the chat and moves the focus with it', a
 	h.unmount();
 });
 
-test('arrows move the input between the chat and the console', async () => {
+test('Shift+arrows move the input between the chat and the console, plain arrows do not', async () => {
 	const {h, type} = setup();
 	await h.settle(60);
 	await type('\x14');
 	await type(LEFT);
+	assert.match(h.lastFrame(), /CHAT\[\] idle/);
+	await type(SHIFT_LEFT);
 	assert.match(h.lastFrame(), /CHAT\[\] focused/);
 	await type('x');
 	assert.match(h.lastFrame(), /CHAT\[x\]/);
 	await type('\x14');
 	await type('\x14');
-	await type(LEFT);
+	await type(SHIFT_LEFT);
 	await type('\x15');
 	assert.match(h.lastFrame(), /focused/);
 	h.unmount();
 });
 
-test('the empty chat moves right into the open console only', async () => {
+test('the chat moves right into the open console only', async () => {
 	const {h, type} = setup();
 	await h.settle(60);
-	await type(RIGHT);
+	await type(SHIFT_RIGHT);
 	assert.match(h.lastFrame(), /CHAT\[\] focused/);
 	await type('\x14');
-	await type(LEFT);
-	await type(RIGHT);
+	await type(SHIFT_LEFT);
+	await type(SHIFT_RIGHT);
 	assert.match(h.lastFrame(), /CHAT\[\] idle/);
 	h.unmount();
 });

@@ -32,7 +32,6 @@ type Props = {
 	columns?: number;
 	rows?: number;
 	active?: boolean;
-	onLeftEdge?: () => void;
 	onIdleTab?: () => void;
 	isHostKey?: (input: string, key: Key) => boolean;
 	mouseRef?: React.MutableRefObject<((e: MouseInputEvent) => boolean) | null>;
@@ -87,7 +86,6 @@ export default function Prompt({
 	onSubmit,
 	onInterrupt,
 	active = true,
-	onLeftEdge,
 	onIdleTab,
 	isHostKey,
 	mouseRef,
@@ -124,7 +122,6 @@ export default function Prompt({
 		(input, key) => {
 			if (isHostKey?.(input, key)) return;
 			if (key.pageUp || key.pageDown || (key.shift && (key.upArrow || key.downArrow))) return;
-			if (key.leftArrow && onLeftEdge && stateRef.current.value === '') return onLeftEdge();
 			apply(toKeyInput(input, key));
 		},
 		{isActive: active},

@@ -1056,10 +1056,6 @@ export default function App({
 				active={active === 'panel' && !panelView}
 				isHostKey={isHostKey}
 				{...(side && {onIdleTab: () => void togglePanel()})}
-				{...(side && geo.split && {onLeftEdge: () => {
-						panelEpoch.current++;
-						setFocus('main');
-					}})}
 			/>
 		);
 		return (

@@ -129,7 +129,7 @@ test('Enter while a save is pending is ignored; the next cycle starts from the s
 	h.unmount();
 });
 
-test('← on the first tab hands focus to the host, Ctrl+C closes, Tab never saves', async () => {
+test('← on the first tab keeps the focus, Ctrl+C closes, Tab never saves', async () => {
 	const sets: string[] = [];
 	const calls: Calls = {moves: []};
 	let closed = 0;
@@ -140,7 +140,7 @@ test('← on the first tab hands focus to the host, Ctrl+C closes, Tab never sav
 	await h.settle();
 	h.press(LEFT);
 	await h.settle();
-	assert.deepEqual(calls.moves, ['left']);
+	assert.deepEqual(calls.moves, []);
 	assert.deepEqual(sets, []);
 	h.press(String.fromCharCode(3));
 	await h.settle();

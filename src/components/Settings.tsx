@@ -211,7 +211,6 @@ export default function Settings({tabs: initial, control, reload}: {tabs: Settin
 			if (key.escape || (key.ctrl && input === 'c')) return control.close();
 			if (key.leftArrow) {
 				if (tab > 0) setTab(tab - 1);
-				else control.host?.move('left');
 				return;
 			}
 			if (key.rightArrow) {
