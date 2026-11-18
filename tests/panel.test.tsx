@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import React, {useEffect, useState} from 'react';
 import {Text, useInput} from 'ink';
-import App, {panelGeometry} from '../src/app.js';
+import App, {panelGeometry, titleColumns} from '../src/app.js';
 import {windowStart} from '../src/kit/window.js';
 import {createRegistry} from '../src/commands.js';
 import {createFakeStdout, mountHarness} from './testkit.js';
@@ -445,6 +445,12 @@ test('a main view can show a title bar above the transcript; it goes when the vi
 	await h.settle(60);
 	assert.doesNotMatch(h.lastFrame(), /Evil/);
 	h.unmount();
+});
+
+test('the title bar never reaches the last column without the side panel', () => {
+	assert.equal(titleColumns(panelGeometry(100, 30, false)), 99);
+	const g = panelGeometry(120, 30, true);
+	assert.equal(titleColumns(g), g.mainColumns);
 });
 
 test('titleBarText keeps the detail on the right and shortens the title first', async () => {

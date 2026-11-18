@@ -113,6 +113,11 @@ export function panelGeometry(columns: number, rows: number, open: boolean, shar
 	return {split: true, panelColumns, mainColumns: columns - panelColumns, panelRows};
 }
 
+// Without the side panel the main column ends at the terminal's last column; a full-width row there can wrap and scroll the frame.
+export function titleColumns(geo: PanelGeometry): number {
+	return geo.split ? geo.mainColumns : Math.max(1, geo.mainColumns - 1);
+}
+
 export function shareAtBorder(columns: number, x: number): number {
 	const {panelColumns} = panelGeometry(columns, 0, true, (columns - x) / columns);
 	return panelColumns / columns;
@@ -1122,7 +1127,7 @@ export default function App({
 						width={geo.mainColumns > 0 ? geo.mainColumns : undefined}
 						display={geo.mainColumns > 0 ? 'flex' : 'none'}
 					>
-						{mainTitle !== undefined && <TitleBar {...mainTitle} columns={geo.mainColumns} focused={!(panelOpen && geo.split && active === 'panel')} />}
+						{mainTitle !== undefined && <TitleBar {...mainTitle} columns={titleColumns(geo)} focused={!(panelOpen && geo.split && active === 'panel')} />}
 						{mainHeader !== undefined && mainHeader.id === main.id && (
 							<Box ref={headerRef} flexDirection="column" flexShrink={0} overflow="hidden">
 								<ViewLayoutContext.Provider value={mainLayout}>
