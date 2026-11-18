@@ -2,7 +2,7 @@ import React from 'react';
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {Text} from 'ink';
-import {BrailleBar, Frame, LabeledInput, labeledInputRows, ListPicker, SpanRows, Spinner, SPINNERS, StatusBar, useSpinnerFrame} from '../../src/kit/ui.js';
+import {BrailleBar, Frame, LabeledInput, labeledInputRows, ListPicker, SpanRows, StatusBar} from '../../src/kit/ui.js';
 import {hangingRows, stringCells} from '../../src/kit/text.js';
 import {resetColorDepthCacheForTests} from '../../src/kit/theme.js';
 import {mountHarness, wait} from '../testkit.js';
@@ -67,42 +67,6 @@ test('ListPicker: empty list shows the empty text; labels are sanitised and scru
 	assert.ok(!h.allOutput().includes(`${ESC}]0`));
 	assert.ok(!h.allOutput().includes('‮'));
 	h.unmount();
-});
-
-function Probe({active}: {active: boolean}) {
-	return <Text>{`[${useSpinnerFrame(['a', 'b', 'c'], 15, active)}]`}</Text>;
-}
-
-test('Spinner advances frames', async () => {
-	const h = mountHarness(<Spinner frames={SPINNERS.squareCorners} intervalMs={15} />);
-	await h.settle();
-	const first = plain(h.lastFrame());
-	await wait(80);
-	assert.notEqual(plain(h.lastFrame()), first);
-	h.unmount();
-});
-
-test('SPINNERS has the Claude Code sparkle and blink frames', () => {
-	assert.deepEqual(SPINNERS.sparkle, ['·', '✢', '✳', '✶', '✻', '✽', '✻', '✶', '✳', '✢']);
-	assert.deepEqual(SPINNERS.blink, ['●', ' ']);
-});
-
-test('useSpinnerFrame starts no timer while inactive', async () => {
-	const real = globalThis.setInterval;
-	let started = 0;
-	globalThis.setInterval = ((...args: Parameters<typeof setInterval>) => {
-		started++;
-		return real(...args);
-	}) as typeof setInterval;
-	try {
-		const h = mountHarness(<Probe active={false} />);
-		await wait(60);
-		assert.match(plain(h.lastFrame()), /\[a\]/);
-		h.unmount();
-		assert.equal(started, 0);
-	} finally {
-		globalThis.setInterval = real;
-	}
 });
 
 test('Frame draws a box with tone colours and sanitised rows', async () => {

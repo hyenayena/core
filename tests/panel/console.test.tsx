@@ -228,7 +228,7 @@ test('an activity report shows a row in the open console, flashes after it ends 
 	assert.match(plain(h.lastFrame()), /chat/);
 	events.emit(ACTIVITY_TOPIC, {source: 'chat', id: 'main', label: 'chat', state: 'gone'});
 	await h.settle(250);
-	assert.doesNotMatch(plain(h.lastFrame()).split('\n').filter(l => l.includes('│')).join('\n'), /⠋ chat|⠙ chat|⠹ chat|⠸ chat|⠼ chat|⠴ chat|⠦ chat|⠧ chat|⠇ chat|⠏ chat/);
+	assert.doesNotMatch(plain(h.lastFrame()).split('\n').filter(l => l.includes('│')).join('\n'), /[⣾⣽⣻⢿⡿⣟⣯⣷] chat/);
 	h.unmount();
 });
 
@@ -273,6 +273,6 @@ test('a command that throws a plain Error leaves a cross header and no running s
 	const lines = plain(h.lastFrame()).split('\n').filter(l => l.includes('boom'));
 	assert.ok(lines.some(l => /✗ boom/.test(l)));
 	assert.equal(lines.some(l => /❯ boom/.test(l)), false);
-	assert.doesNotMatch(plain(h.lastFrame()), /[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/);
+	assert.doesNotMatch(plain(h.lastFrame()), /[⣾⣽⣻⢿⡿⣟⣯⣷]/);
 	h.unmount();
 });

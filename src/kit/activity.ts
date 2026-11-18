@@ -1,6 +1,6 @@
 import type {EventBus} from '../../../../src/api.js';
 import {sanitizeText} from '../hints/sanitize.js';
-import {glyph, spinnerFrames} from './glyphs.js';
+import {glyph, spinnerFrame} from './glyphs.js';
 import {segmentBar, type BarSegment} from './segment-bar.js';
 import {SGR_RESET, colorDepth, toneSgr, type ColorDepth, type ThemeTone} from './theme.js';
 
@@ -101,11 +101,10 @@ export function activityRow(items: readonly ActivityReport[], width: number, opt
 	if (items.length === 0) return '';
 	const depth = options.depth ?? colorDepth();
 	const ascii = options.ascii === true;
-	const frames = spinnerFrames('braille', {ascii});
 	const mark = (state: ActivityState): string => {
 		switch (state) {
 			case 'running':
-				return paint(frames[((options.frame % frames.length) + frames.length) % frames.length]!, 'running', depth);
+				return paint(spinnerFrame(options.frame, {ascii}), 'running', depth);
 			case 'ok':
 				return paint(glyph('check', {ascii}), 'ok', depth);
 			case 'failed':

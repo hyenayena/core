@@ -1,7 +1,7 @@
 import {styledCells} from '../transcript/wrap.js';
 import {stringCells, truncateCells} from '../hints/width.js';
 import {defineBuiltinSection, type GalleryRenderer} from '../kit/gallery.js';
-import {GLYPHS, SPINNER_GLYPHS} from '../kit/glyphs.js';
+import {GLYPHS, spinnerFrames} from '../kit/glyphs.js';
 import {consoleRenderer} from './console-section.js';
 import {COLOR_DEPTHS, SGR_ATTR, THEME_TONES, paintTone, type ColorDepth} from '../kit/theme.js';
 
@@ -42,9 +42,7 @@ const glyphsRenderer: GalleryRenderer = ({width, ascii}) => {
 				.trimEnd(),
 		);
 	}
-	for (const [name, s] of Object.entries(SPINNER_GLYPHS)) {
-		rows.push(truncateCells(`${name}: ${(ascii ? s.ascii : s.frames).join(' ')}`, width));
-	}
+	rows.push(truncateCells(`spinner: ${spinnerFrames({ascii}).join(' ')}`, width));
 	rows.push(paintTone(ascii ? 'ASCII fallbacks are in use' : 'Unicode glyphs are in use; the ASCII fallback is in brackets', 'muted'));
 	return rows;
 };

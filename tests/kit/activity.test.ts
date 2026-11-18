@@ -123,12 +123,12 @@ test('activityRow fits the width at every size and is empty without items', () =
 
 test('activityRow marks each state and drops the detail and counts when narrow', () => {
 	const wide = stripStyles(activityRow(items, 200, {frame: 0, depth: 'none'}));
-	assert.match(wide, /⠋ dev 120\/340 core/);
+	assert.match(wide, /⣾ dev 120\/340 core/);
 	assert.match(wide, /✓ nightly/);
 	assert.match(wide, /✗ chat/);
 	assert.match(wide, /· other/);
 	const mid = stripStyles(activityRow(items.slice(0, 1), 12, {frame: 0, depth: 'none'}));
-	assert.match(mid, /^⠋ dev/);
+	assert.match(mid, /^⣾ dev/);
 	assert.doesNotMatch(mid, /core/);
 });
 

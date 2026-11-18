@@ -1,23 +1,19 @@
-import React, {useEffect, useState} from 'react';
+import React, {useSyncExternalStore} from 'react';
 import {Text} from 'ink';
+import {asciiGlyphs, spinnerFrame} from './glyphs.js';
+import {spinnerClock} from './spinner-clock.js';
 
-export const SPINNERS = {
-	squareCorners: ['◰', '◳', '◲', '◱'],
-	braille: ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'],
-	sparkle: ['·', '✢', '✳', '✶', '✻', '✽', '✻', '✶', '✳', '✢'],
-	blink: ['●', ' '],
-};
+const noopSubscribe = (): (() => void) => () => {};
+const readIdle = (): number => 0;
 
-export function useSpinnerFrame(frames: readonly string[], intervalMs: number, active = true): string {
-	const [frame, setFrame] = useState(0);
-	useEffect(() => {
-		if (!active || frames.length === 0) return;
-		const timer = setInterval(() => setFrame(f => (f + 1) % frames.length), intervalMs);
-		return () => clearInterval(timer);
-	}, [frames, intervalMs, active]);
-	return frames.length === 0 ? '' : (frames[frame % frames.length] as string);
+export function useSpinnerTick(active = true): number {
+	return useSyncExternalStore(active ? spinnerClock.subscribe : noopSubscribe, active ? spinnerClock.tick : readIdle);
 }
 
-export function Spinner({frames, intervalMs}: {frames: readonly string[]; intervalMs: number}) {
-	return <Text>{useSpinnerFrame(frames, intervalMs)}</Text>;
+export function useSpinner(active = true): string {
+	return spinnerFrame(useSpinnerTick(active), {ascii: asciiGlyphs(process.env)});
+}
+
+export function Spinner({active = true}: {active?: boolean} = {}) {
+	return <Text>{useSpinner(active)}</Text>;
 }

@@ -42,21 +42,25 @@ export const GLYPHS = Object.freeze({
 
 export type GlyphName = keyof typeof GLYPHS;
 
-export const SPINNER_GLYPHS = Object.freeze({
-	braille: {frames: ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'], ascii: ['|', '/', '-', '\\']},
-	sparkle: {frames: ['·', '✢', '✳', '✶', '✻', '✽', '✻', '✶', '✳', '✢'], ascii: ['.', '+', '*', '*', '*', '*', '*', '*', '+', '+']},
+export const SPINNER = Object.freeze({
+	frames: Object.freeze(['⣾', '⣽', '⣻', '⢿', '⡿', '⣟', '⣯', '⣷']),
+	ascii: Object.freeze(['|', '/', '-', '\\']),
+	intervalMs: 120,
 });
-
-export type SpinnerGlyphName = keyof typeof SPINNER_GLYPHS;
 
 export function glyph(name: GlyphName, options: {ascii?: boolean} = {}): string {
 	const g: GlyphDef = GLYPHS[name];
 	return options.ascii === true ? (g.ascii ?? g.char) : g.char;
 }
 
-export function spinnerFrames(name: SpinnerGlyphName, options: {ascii?: boolean} = {}): readonly string[] {
-	const s = SPINNER_GLYPHS[name];
-	return options.ascii === true ? s.ascii : s.frames;
+export function spinnerFrames(options: {ascii?: boolean} = {}): readonly string[] {
+	return options.ascii === true ? SPINNER.ascii : SPINNER.frames;
+}
+
+export function spinnerFrame(tick: number, options: {ascii?: boolean} = {}): string {
+	const frames = spinnerFrames(options);
+	const n = frames.length;
+	return frames[(((Math.floor(tick) % n) + n) % n)] as string;
 }
 
 export function asciiGlyphs(env: Readonly<Record<string, string | undefined>>): boolean {

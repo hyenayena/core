@@ -30,8 +30,8 @@ import {errorLines, errorLogFields, stackFrames} from './error-lines.js';
 import {LineError, parseLine} from './parse-line.js';
 import {createCommandBridge, type AgentViewHandle} from './agent/bridge.js';
 import {unknownCommandLines} from './hints/typo.js';
-import {asciiGlyphs, glyph, spinnerFrames} from './kit/glyphs.js';
-import {useSpinnerFrame} from './kit/Spinner.js';
+import {asciiGlyphs, glyph} from './kit/glyphs.js';
+import {useSpinnerTick} from './kit/Spinner.js';
 import {
 	ACTIVITY_TOPIC,
 	EMPTY_ACTIVITY,
@@ -89,7 +89,6 @@ export type AppMouse = {
 };
 
 const ACTIVITY_FLUSH_MS = 100;
-const ACTIVITY_SPIN_MS = 120;
 const MAX_TIMER_MS = 2 ** 31 - 1;
 export const MAX_LINES = 5000;
 const TITLE_MAX = 200;
@@ -228,8 +227,7 @@ export default function App({
 	const activityItems = visibleActivity(feedRef.current, Date.now());
 	const activityShown = side && panelOpen && panelView === null && activityItems.length > 0;
 	const useAscii = asciiGlyphs(process.env);
-	const spinFrames = spinnerFrames('braille', {ascii: useAscii});
-	const spinGlyph = useSpinnerFrame(spinFrames, ACTIVITY_SPIN_MS, panelOpen && activityItems.some(i => i.state === 'running'));
+	const spinTick = useSpinnerTick(panelOpen && activityItems.some(i => i.state === 'running'));
 
 	const panelViewRows = side ? Math.max(1, geo.panelRows - 1) : Math.max(1, rows - 1);
 	const panelOutputRows = Math.max(0, geo.panelRows - 4 - (activityShown ? 1 : 0));
@@ -1094,7 +1092,7 @@ export default function App({
 				folds={hasFolds(sections) ? (expandAll ? 'fold' : 'unfold') : undefined}
 				activity={
 					activityShown
-						? activityRow(activityItems, panelWidth, {frame: Math.max(0, spinFrames.indexOf(spinGlyph)), ascii: useAscii})
+						? activityRow(activityItems, panelWidth, {frame: spinTick, ascii: useAscii})
 						: ''
 				}
 				hasView={panelView !== null}

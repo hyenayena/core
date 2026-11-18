@@ -118,7 +118,7 @@ export {
 	type Ansi16,
 	type InkToneProps,
 } from './theme.js';
-export {GLYPHS, SPINNER_GLYPHS, glyph, spinnerFrames, asciiGlyphs, type GlyphDef, type GlyphName, type SpinnerGlyphName} from './glyphs.js';
+export {GLYPHS, SPINNER, glyph, spinnerFrames, spinnerFrame, asciiGlyphs, type GlyphDef, type GlyphName} from './glyphs.js';
 export {
 	COLUMN_BREAKPOINTS,
 	ROW_BREAKPOINTS,

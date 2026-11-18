@@ -15,7 +15,7 @@ const ESC = '\x1b';
 const CTRL_T = '\x14';
 const CSI = new RegExp(ESC + '\\[[0-9;?]*[A-Za-z]', 'g');
 const plain = (frame: string) => frame.replace(CSI, '');
-const SPINNER = /[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/;
+const SPINNER = /[⣾⣽⣻⢿⡿⣟⣯⣷]/;
 
 function bus(): EventBus {
 	const handlers = new Map<string, Set<(p: unknown) => void>>();
