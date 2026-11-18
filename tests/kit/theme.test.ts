@@ -120,10 +120,16 @@ test('SPAN_TONE_THEME and TONE_THEME point at real tones', () => {
 });
 
 test('running tone', () => {
-	assert.equal(toneSgr('running', 'truecolor'), `${ESC}[38;2;215;119;87m`);
-	assert.equal(toneSgr('running', '256'), `${ESC}[38;5;173m`);
-	assert.equal(toneSgr('running', '16'), `${ESC}[33m`);
+	assert.equal(toneSgr('running', 'truecolor'), `${ESC}[38;2;255;215;0m`);
+	assert.equal(toneSgr('running', '256'), `${ESC}[38;5;220m`);
+	assert.equal(toneSgr('running', '16'), `${ESC}[93m`);
 	assert.equal(toneSgr('running', 'none'), '');
+});
+
+test('orange tone keeps the old running coral', () => {
+	assert.equal(toneSgr('orange', 'truecolor'), `${ESC}[38;2;215;119;87m`);
+	assert.equal(toneSgr('orange', '256'), `${ESC}[38;5;173m`);
+	assert.equal(toneSgr('orange', '16'), `${ESC}[33m`);
 });
 
 test('the title bar tones have a background at every colour depth and are inverse without colours', () => {
