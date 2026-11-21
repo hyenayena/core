@@ -1,4 +1,6 @@
-import type {Command, CommandContext, Logger, SettingsTab} from '../../../src/api.js';
+import type {Command, CommandContext, EventBus, Logger, SettingsTab} from '../../../src/api.js';
+import {reportReload, type ReloadNotice} from './kit/reload.js';
+import {runSourceOf} from './run-source.js';
 import {collectSettingsTabs} from './view/settings-tabs.js';
 import {AGENT_MODES, getPrefs, setPrefs, TITLE_BAR_COLORS, type AgentMode, type TitleBarColor} from './view/prefs.js';
 import {buildCatalog, type Catalog} from './hints/catalog.js';
@@ -82,7 +84,7 @@ function printHelp(catalog: Catalog, path: readonly string[], ctx: CommandContex
 	else printStyled(ctx, blocks);
 }
 
-export function createRegistry(extra: Command[], log: Logger = noopLog, options: {transfer?: TransferDeps; reload?: () => void} = {}): Registry {
+export function createRegistry(extra: Command[], log: Logger = noopLog, options: {transfer?: TransferDeps; reload?: () => void; events?: EventBus} = {}): Registry {
 	const commands: Command[] = [
 		{
 			name: 'help',
@@ -139,7 +141,7 @@ export function createRegistry(extra: Command[], log: Logger = noopLog, options:
 			usage: 'reload',
 			notes: [
 				'Ends this run like exit and starts yena again (code, modules and the start mode are read anew).',
-				'An open chat stops; one kept working in the background (Keep working after exit) goes on and can be reopened with chat.',
+				'An open chat stops; one kept working in the background (Keep working after exit) goes on and can be reopened with chat. When the reload was typed in that chat or run by its assistant, the chat opens again after the start.',
 				'Works when yena was started with ./yena or ./yena start; ./yena restart restarts the whole container instead.',
 			],
 			agent: 'confirm',
@@ -148,6 +150,10 @@ export function createRegistry(extra: Command[], log: Logger = noopLog, options:
 				if (!options.reload) {
 					throw new Error('reload needs the yena script: this app was not started with ./yena or ./yena start, so nothing would start it again; use exit and start it yourself');
 				}
+				const source = runSourceOf(ctx);
+				const notice: ReloadNotice =
+					typeof ctx.caller === 'string' ? {via: 'bridge', caller: ctx.caller} : source ? {via: 'view', view: source.view} : {via: 'console'};
+				reportReload(options.events, notice);
 				options.reload();
 				ctx.exit();
 			},

@@ -9,6 +9,7 @@ import {createFakeStdout, mountHarness} from './testkit.js';
 import {useViewHost} from '../src/view/use-view-host.js';
 import {stringCells} from '../src/hints/width.js';
 import type {Command, MountControl, Setting} from '../../../src/api.js';
+import {runSourceOf} from '../src/run-source.js';
 
 const LEFT = '\x1b[D';
 const RIGHT = '\x1b[C';
@@ -569,6 +570,18 @@ test('Tab on an empty console line closes the console, Tab with hints completes;
 	await type('\t');
 	assert.doesNotMatch(h.lastFrame(), /Console/);
 	assert.match(h.lastFrame(), /CHAT\[\] focused/);
+	h.unmount();
+});
+
+test('a command run by a view sees its source; a typed console line does not', async () => {
+	const seen: Array<ReturnType<typeof runSourceOf>> = [];
+	const probe: Command = {name: 'probe', description: 'probe', usage: 'probe', run: (_a, ctx) => void seen.push(runSourceOf(ctx))};
+	const {h, control} = setup([probe]);
+	await h.settle(60);
+	const host = control().host as unknown as {runLine(l: string): boolean};
+	assert.equal(host.runLine('probe'), true);
+	await h.settle(60);
+	assert.deepEqual(seen, [{view: 'main'}]);
 	h.unmount();
 });
 

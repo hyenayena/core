@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import type {Command, CommandContext, SettingsTab, StyledBlock} from '../../../src/api.js';
 import {createRegistry} from '../src/commands.js';
+import {withRunSource} from '../src/run-source.js';
+import type {EventBus} from '../../../src/api.js';
 
 const ctxWith = (out: string[]): CommandContext => ({print: t => void out.push(...t.split('\n')), clear() {}, exit() {}});
 
@@ -87,4 +89,27 @@ test('reload is confirm, calls reload then exit, and refuses without the yena sc
 		/cannot run from the terminal/,
 	);
 	assert.deepEqual(calls, []);
+});
+
+test('reload reports who ran it before it restarts, and nothing when it refuses', async () => {
+	const order: unknown[] = [];
+	const events: EventBus = {emit: (_t, payload) => void order.push(payload), on: () => () => {}};
+	const registry = createRegistry([], undefined, {reload: () => void order.push('reload'), events});
+	const base = {...ctxWith([]), exit: () => void order.push('exit')};
+	await registry.find('reload')!.run([], base);
+	await registry.find('reload')!.run([], {...base, caller: 'yena'});
+	await registry.find('reload')!.run([], withRunSource(base, {view: 'main'}));
+	await registry.find('reload')!.run([], {...withRunSource(base, {view: 'main'}), caller: 'scheduler'});
+	assert.deepEqual(order, [
+		{via: 'console'}, 'reload', 'exit',
+		{via: 'bridge', caller: 'yena'}, 'reload', 'exit',
+		{via: 'view', view: 'main'}, 'reload', 'exit',
+		{via: 'bridge', caller: 'scheduler'}, 'reload', 'exit',
+	]);
+
+	const none: unknown[] = [];
+	const quiet: EventBus = {emit: (_t, payload) => void none.push(payload), on: () => () => {}};
+	await assert.rejects(async () => createRegistry([], undefined, {reload: () => {}, events: quiet}).find('reload')!.run([], {...base, headless: true}), /cannot run from the terminal/);
+	await assert.rejects(async () => createRegistry([], undefined, {events: quiet}).find('reload')!.run([], base), /reload needs the yena script/);
+	assert.deepEqual(none, []);
 });

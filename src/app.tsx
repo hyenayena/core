@@ -23,6 +23,7 @@ import type {
 } from '../../../src/api.js';
 import {noopLog} from './noop-log.js';
 import type {Registry} from './commands.js';
+import {withRunSource, type RunSource} from './run-source.js';
 import {buildCatalog, type CatalogSub} from './hints/catalog.js';
 import {sanitizeText} from './hints/sanitize.js';
 import {sliceStyledCells, styledCells} from './transcript/wrap.js';
@@ -356,7 +357,7 @@ export default function App({
 		return true;
 	};
 
-	const submitRef = useRef<(raw: string) => Promise<void>>(async () => {});
+	const submitRef = useRef<(raw: string, source?: RunSource) => Promise<void>>(async () => {});
 
 	const togglePanel = (): boolean => {
 		const l = live.current;
@@ -393,7 +394,7 @@ export default function App({
 				refreshCatalog();
 				setPanelOpen(true);
 			}
-			void submitRef.current(line);
+			void submitRef.current(line, {view: target});
 			return true;
 		},
 		listCommands: () =>
@@ -709,10 +710,14 @@ export default function App({
 	});
 	const commandBridge = bridgeRef.current;
 
-	const makeCtx = (print: (text: string, tone?: ThemeTone, options?: PrintOptions) => void, styled: (blocks: readonly StyledBlock[]) => void): CommandContext => {
+	const makeCtx = (
+		print: (text: string, tone?: ThemeTone, options?: PrintOptions) => void,
+		styled: (blocks: readonly StyledBlock[]) => void,
+		source?: RunSource,
+	): CommandContext => {
 		let ownsMain = false;
 		const out = (text: string, tone?: ThemeTone, options?: PrintOptions) => (ownsMain ? printMain : print)(text, tone, options);
-		return {
+		const ctx: CommandContext = {
 			print: (text, options) => out(text, undefined, options),
 			printStyled: blocks => (ownsMain ? printMainStyled : styled)(blocks),
 			clear: clearAll,
@@ -727,6 +732,7 @@ export default function App({
 			),
 			commandBridge,
 		};
+		return source ? withRunSource(ctx, source) : ctx;
 	};
 
 	const runCommand = async (
@@ -735,9 +741,10 @@ export default function App({
 		args: string[],
 		print: (text: string, tone?: ThemeTone, options?: PrintOptions) => void,
 		styled: (blocks: readonly StyledBlock[]) => void,
+		source?: RunSource,
 	): Promise<boolean> => {
 		try {
-			await command.run(args, makeCtx(print, styled));
+			await command.run(args, makeCtx(print, styled, source));
 			return true;
 		} catch (error) {
 			const fields = errorLogFields(error);
@@ -763,7 +770,7 @@ export default function App({
 		}
 	}, [registry]);
 
-	const handleSubmit = async (raw: string) => {
+	const handleSubmit = async (raw: string, source?: RunSource) => {
 		const line = raw.trim();
 		if (isQuitLine(line)) {
 			if (side && panelOpen) togglePanel();
@@ -813,7 +820,7 @@ export default function App({
 			return;
 		}
 		try {
-			end((await runCommand(command, name, args, print, printStyled)) ? 'ok' : 'failed');
+			end((await runCommand(command, name, args, print, printStyled, source)) ? 'ok' : 'failed');
 		} catch (error) {
 			return failUnexpected(error);
 		}

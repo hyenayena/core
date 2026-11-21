@@ -46,6 +46,7 @@ export {
 	type ActivityFeed,
 	type ActivityRowOptions,
 } from './activity.js';
+export {RELOAD_TOPIC, reportReload, readReload, type ReloadNotice} from './reload.js';
 export {checklistRows, type ChecklistItem, type ChecklistOptions} from './checklist.js';
 export type {Tone, FrameRow, PickerItem} from './types.js';
 export {
