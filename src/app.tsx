@@ -100,7 +100,11 @@ const COPY_NOTICE_MS = 2000;
 export const AUTO_PANEL_GRACE_MS = 3000;
 
 export const WELCOME = 'yena — type "help" for the list of commands';
-export const WELCOME_WITH_VIEW = 'press Tab (or Ctrl+T) to open the console';
+export const WELCOME_WITH_VIEW = [
+	'press Tab (or Ctrl+T) to open the console',
+	'Shift+← / Shift+→ move the focus between the chat and the console',
+	'in the console: "help" lists the commands, "settings" opens the settings',
+].join('\n');
 
 export type PanelGeometry = {split: boolean; panelColumns: number; mainColumns: number; panelRows: number};
 
