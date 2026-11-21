@@ -66,3 +66,25 @@ test('help goes to printStyled as line blocks when the context has it', async ()
 	assert.equal(spans.some(s => s.text === 'go' && s.tone === 'accent'), true);
 	assert.equal(spans.some(s => s.text === 'Go' && s.tone === 'muted'), true);
 });
+
+test('reload is confirm, calls reload then exit, and refuses without the yena script or headless', async () => {
+	assert.equal(createRegistry([]).find('reload')?.agent, 'confirm');
+	const order: string[] = [];
+	const ctx = {...ctxWith([]), exit: () => void order.push('exit')};
+	await createRegistry([], undefined, {reload: () => void order.push('reload')}).find('reload')!.run([], ctx);
+	assert.deepEqual(order, ['reload', 'exit']);
+
+	const none: string[] = [];
+	await assert.rejects(
+		async () => createRegistry([]).find('reload')!.run([], {...ctxWith([]), exit: () => void none.push('exit')}),
+		/reload needs the yena script/,
+	);
+	assert.deepEqual(none, []);
+
+	const calls: string[] = [];
+	await assert.rejects(
+		async () => createRegistry([], undefined, {reload: () => void calls.push('reload')}).find('reload')!.run([], {...ctxWith([]), headless: true, exit: () => void calls.push('exit')}),
+		/cannot run from the terminal/,
+	);
+	assert.deepEqual(calls, []);
+});

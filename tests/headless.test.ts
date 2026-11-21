@@ -92,6 +92,12 @@ test('view commands fail without mount and keep their own error', async () => {
 	assert.equal(error?.exitCode, undefined);
 });
 
+test('reload from the terminal fails with the headless message, not a usage error', async () => {
+	const {error} = await capture(() => headless(yenaWith([]), {args: ['reload']}));
+	assert.match(error!.message, /cannot run from the terminal/);
+	assert.equal(error?.exitCode, undefined);
+});
+
 test('command errors are rethrown unchanged', async () => {
 	const boom = new Error('boom');
 	const {error} = await capture(() => headless(yenaWith([{name: 'boom', description: 'x', run() { throw boom; }}]), {args: ['boom']}));

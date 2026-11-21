@@ -82,7 +82,7 @@ function printHelp(catalog: Catalog, path: readonly string[], ctx: CommandContex
 	else printStyled(ctx, blocks);
 }
 
-export function createRegistry(extra: Command[], log: Logger = noopLog, options: {transfer?: TransferDeps} = {}): Registry {
+export function createRegistry(extra: Command[], log: Logger = noopLog, options: {transfer?: TransferDeps; reload?: () => void} = {}): Registry {
 	const commands: Command[] = [
 		{
 			name: 'help',
@@ -132,6 +132,25 @@ export function createRegistry(extra: Command[], log: Logger = noopLog, options:
 			usage: 'exit',
 			agent: 'confirm',
 			run: (_args, ctx) => ctx.exit(),
+		},
+		{
+			name: 'reload',
+			description: 'Restart yena; an open chat in this app is cut off',
+			usage: 'reload',
+			notes: [
+				'Ends this run like exit and starts yena again (code, modules and the start mode are read anew).',
+				'An open chat stops; one kept working in the background (Keep working after exit) goes on and can be reopened with chat.',
+				'Works when yena was started with ./yena or ./yena start; ./yena restart restarts the whole container instead.',
+			],
+			agent: 'confirm',
+			run: (_args, ctx) => {
+				if (ctx.headless) throw new Error('reload restarts the running app and cannot run from the terminal; ./yena restart restarts the container');
+				if (!options.reload) {
+					throw new Error('reload needs the yena script: this app was not started with ./yena or ./yena start, so nothing would start it again; use exit and start it yourself');
+				}
+				options.reload();
+				ctx.exit();
+			},
 		},
 	];
 
