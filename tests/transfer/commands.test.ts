@@ -21,7 +21,7 @@ const info = (name: string, over: Partial<ModuleInfo> = {}): ModuleInfo => ({
 	name,
 	version: '1.0.0',
 	origin: 'image',
-	export: {deny: []},
+	exportList: true,
 	lock: {source: name, version: '1.0.0', commit: COMMIT},
 	code: {carry: false},
 	...over,
@@ -33,8 +33,8 @@ type Fake = ModuleRegistry & {calls: string[]; requests: ImportRequest[]; planne
 function fakeRegistry(over: {infos?: ModuleInfo[]; plan?: ImportPlan; apply?: () => Promise<void>} = {}): Fake {
 	const infos = over.infos ?? [
 		info('md'),
-		info('priv', {export: undefined}),
-		info('clan', {lock: undefined, code: {carry: true, reason: 'not in the module lock'}, export: undefined}),
+		info('priv', {exportList: false}),
+		info('clan', {lock: undefined, code: {carry: true, reason: 'not in the module lock'}, exportList: false}),
 	];
 	const fake: Fake = {
 		calls: [],
@@ -168,7 +168,7 @@ test('an encrypted export gets the default name, mode 0600, and opens with the p
 	assert.deepEqual(parsed.code.get('clan')?.map(f => f.path), ['yena.json', 'src/index.js']);
 	assert.match(text(t), /clan\s.*carried \(2 files\)/);
 	assert.match(text(t), /clan: code carried in the file \(not in the module lock\), 2 files/);
-	assert.match(text(t), /priv has no export list in its yena\.json: its 3 files were not exported/);
+	assert.match(text(t), /priv has no \[deny export\] section in its \.yenarules: its 3 files were not exported/);
 	assert.match(text(t), /md: 1 links skipped/);
 	assert.match(text(t), /Encrypted with the password you typed/);
 	assert.match(text(t), /Saved .*yena-2026-11-16-10-00\.yna \(.*, 4 files from 3 modules\)/);
@@ -269,7 +269,7 @@ const PLAN: ImportPlan = {
 };
 
 test('import without --yes shows the plan and applies nothing when declined or unanswerable', async () => {
-	const t = await setup({registry: fakeRegistry({plan: PLAN, infos: [info('md'), info('priv', {export: undefined}), info('extra'), info('clan')]}), prompts: fakePrompts({confirmApply: async () => false})});
+	const t = await setup({registry: fakeRegistry({plan: PLAN, infos: [info('md'), info('priv', {exportList: false}), info('extra'), info('clan')]}), prompts: fakePrompts({confirmApply: async () => false})});
 	const name = await exported(t);
 	await t.run('import', name);
 	assert.deepEqual(t.registry.calls.filter(c => c !== 'plan'), []);

@@ -57,8 +57,8 @@ export function createTransferCommands(deps: TransferDeps): Command[] {
 			options: [{name: '--no-encrypt', description: 'Write the file without encryption (unsafe)'}],
 			notes: [
 				'The file is encrypted with a password you type, or a code word shown once.',
-				'Files an export.deny rule covers are never exported.',
-				'A module without an export list exports no files.',
+				"Files a [deny export] or [deny read] rule in a module's .yenarules covers are never exported.",
+				'A module without a [deny export] section exports no files.',
 				'Modules that cannot be reinstalled from a remote source carry their code in the file.',
 				'An existing file is never overwritten.',
 			],

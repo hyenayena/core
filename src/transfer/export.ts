@@ -56,7 +56,7 @@ async function pack(env: TransferEnv): Promise<Packed> {
 		bytes += sum(data.files);
 		for (const note of read.notes) out.warnings.push(`${name}: ${sanitizeText(note, 200)}`);
 		if (data.unfit > 0) out.warnings.push(`${name}: ${data.unfit} files with paths too long for the archive skipped`);
-		if (read.defaultDeny) out.warnings.push(`${name} has no export list in its yena.json: its ${read.skipped} files were not exported`);
+		if (read.defaultDeny) out.warnings.push(`${name} has no [deny export] section in its .yenarules: its ${read.skipped} files were not exported`);
 		for (const file of data.files) out.data.push({module: info.name, file});
 
 		const entry: ArchiveModule = {

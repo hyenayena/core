@@ -147,7 +147,7 @@ export async function runImport(args: string[], ctx: CommandContext, env: Transf
 		const now = installed.get(m.name);
 		let data: string;
 		if (m.data === 'denied') data = 'not exported';
-		else if (now && now.export === undefined && step?.action === 'unchanged') data = 'keep (no export list here)';
+		else if (now && now.exportList !== true && step?.action === 'unchanged') data = 'keep (no export list here)';
 		else data = `replace (${m.files} files)`;
 		cells.push([sanitizeText(m.name, 64), sanitizeText(step ? (step.from ?? '-') : (now?.version ?? '-'), 64), sanitizeText(m.version, 64), step ? changeText(step) : '-', data]);
 	}
