@@ -99,6 +99,8 @@ const RUN_LINE_MAX = 4096;
 const MULTI_CLICK_MS = 400;
 const COPY_NOTICE_MS = 2000;
 export const AUTO_PANEL_GRACE_MS = 3000;
+// A view may print its first lines late (the chat's banner intro); the welcome waits so it does not jump below them.
+export const WELCOME_HOLD_MS = 2000;
 
 export const WELCOME = 'yena — type "help" for the list of commands';
 export const WELCOME_WITH_VIEW = [
@@ -527,19 +529,33 @@ export default function App({
 	const hintShown = useRef(false);
 	const anchoredViewport = () => Math.max(1, viewportHeight() - (hintShown.current ? 0 : 1));
 	const welcomeBelowNext = useRef(false);
+	const heldWelcome = useRef<Line[]>([]);
+	const welcomeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+	const holdWelcome = () => {
+		welcomeBelowNext.current = true;
+		setLines(prev => {
+			const welcome = prev.filter(l => l.welcome);
+			if (welcome.length > 0) heldWelcome.current = welcome;
+			return prev.filter(l => !l.welcome && l.alert);
+		});
+		clearTimeout(welcomeTimer.current);
+		welcomeTimer.current = setTimeout(() => releaseWelcome(), WELCOME_HOLD_MS);
+	};
+	const releaseWelcome = (line?: Line) => {
+		welcomeBelowNext.current = false;
+		clearTimeout(welcomeTimer.current);
+		welcomeTimer.current = undefined;
+		const held = heldWelcome.current;
+		heldWelcome.current = [];
+		setLines(prev => [...(line ? [line] : []), ...held, ...prev].slice(-MAX_LINES));
+	};
+	useEffect(() => () => clearTimeout(welcomeTimer.current), []);
 	const printMain = (text: string, tone?: ThemeTone, options?: PrintOptions) => {
 		const actions = cleanActions(options?.actions);
 		const render = typeof options?.render === 'function' ? options.render : undefined;
 		const line = {id: nextId++, text, tone, ...(actions && {actions}), ...(render && {render})};
-		if (!welcomeBelowNext.current) {
-			setLines(prev => [...prev, line].slice(-MAX_LINES));
-			return;
-		}
-		welcomeBelowNext.current = false;
-		setLines(prev => {
-			const at = prev.findIndex(l => l.welcome);
-			return (at < 0 ? [...prev, line] : [...prev.slice(0, at), line, ...prev.slice(at)]).slice(-MAX_LINES);
-		});
+		if (welcomeBelowNext.current) releaseWelcome(line);
+		else setLines(prev => [...prev, line].slice(-MAX_LINES));
 	};
 	const printMainStyled = (blocks: unknown) => {
 		const styled = normalizeStyled(blocks);
@@ -668,8 +684,7 @@ export default function App({
 				log.debug('view mounted', {id});
 				if (target === 'main') {
 					onMain();
-					setLines(prev => prev.filter(l => l.welcome || l.alert));
-					welcomeBelowNext.current = true;
+					holdWelcome();
 					setAnchor(null);
 					clearSelection();
 					setMain({id, element});

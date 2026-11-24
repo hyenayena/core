@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import React, {useEffect, useState} from 'react';
 import {Text, useInput} from 'ink';
-import App, {panelGeometry, titleColumns} from '../src/app.js';
+import App, {WELCOME_HOLD_MS, panelGeometry, titleColumns} from '../src/app.js';
 import {windowStart} from '../src/kit/window.js';
 import {createRegistry} from '../src/commands.js';
 import {createFakeStdout, mountHarness} from './testkit.js';
@@ -106,6 +106,36 @@ test('the first print of a new main view goes above the welcome hint', async () 
 	const hint = frame.indexOf('press Tab (or Ctrl+T) to open the console');
 	const after = frame.indexOf('after-hint');
 	assert.ok(banner >= 0 && hint > banner && after > hint, 'banner, then the hint, then later prints');
+	h.unmount();
+});
+
+function LatePrinting({control}: {control: MountControl}) {
+	useEffect(() => {
+		const t = setTimeout(() => control.print!('LATE-BANNER'), 150);
+		return () => clearTimeout(t);
+	}, [control]);
+	return <Text>CHAT</Text>;
+}
+
+test('the welcome hint waits for a late first print of the main view and then sits under it', async () => {
+	const commands: Command[] = [
+		{
+			name: 'chat',
+			description: 'open the chat',
+			autostart: true,
+			run: async (_a, ctx) => {
+				await ctx.mount!(c => <LatePrinting control={c} />);
+			},
+		},
+	];
+	const h = mountHarness(<App registry={createRegistry(commands)} />, {columns: 100, rows: 30});
+	await h.settle(60);
+	assert.match(h.lastFrame(), /CHAT/);
+	assert.doesNotMatch(h.lastFrame(), /press Tab/, 'no hint before the first print');
+	await h.settle(200);
+	const frame = h.lastFrame();
+	const banner = frame.indexOf('LATE-BANNER');
+	assert.ok(banner >= 0 && frame.indexOf('press Tab (or Ctrl+T) to open the console') > banner);
 	h.unmount();
 });
 
@@ -542,7 +572,9 @@ test('a new main view starts on a clean transcript, keeping the welcome line', a
 	h.press(ENTER);
 	await h.settle(80);
 	assert.doesNotMatch(h.lastFrame(), /old message/);
-	assert.match(h.lastFrame(), /press Tab/);
+	assert.doesNotMatch(h.lastFrame(), /press Tab/, 'the hint waits for the view to print');
+	await h.settle(WELCOME_HOLD_MS + 100);
+	assert.match(h.lastFrame(), /press Tab/, 'a view that prints nothing still gets the hint');
 	assert.match(h.lastFrame(), /CHAT\[\]/);
 	h.unmount();
 });
