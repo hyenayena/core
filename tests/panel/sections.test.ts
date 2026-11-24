@@ -113,9 +113,14 @@ test('expandAll opens everything; toggleFold flips one section on its effective 
 	assert.equal(plain(toggleFold(s, 1, true), 40, {expandAll: true}).some(r => r.includes('out-one')), false);
 });
 
-test('marks: prompt while running and when ok, a cross when failed; the failed note is an error row', () => {
+test('marks: prompt for the user and the agent glyph for a caller while running and when ok, a cross when failed; the failed note is an error row', () => {
+	assert.match(plain(beginSection([], {id: 2, echo: 'mine'}, 0))[0]!, /^❯ mine/);
+	assert.match(sectionRows(beginSection([], {id: 3, echo: 'its', caller: 'bot'}, 0), rowsOf, {width: 30, depth: 'none', ascii: true})[0]!.text, /^& its/);
 	let s = beginSection([], {id: 1, echo: 'run', caller: 'bot'}, 0);
-	assert.match(plain(s)[0]!, /^❯ run\s+bot$/);
+	assert.match(plain(s)[0]!, /^✦ run\s+bot$/);
+	s = endSection(s, 1, 'ok', 50);
+	assert.match(plain(s)[0]!, /^✦ run\s+bot$/);
+	s = beginSection([], {id: 1, echo: 'run', caller: 'bot'}, 0);
 	s = endSection(s, 1, 'failed', 100, 'run: error (boom)');
 	s = appendEntries(s, 1, [entry('x')], 100);
 	const rows = plain(s);

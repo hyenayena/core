@@ -145,7 +145,7 @@ export function sectionRows(sections: readonly PanelSection[], rowsOf: RowsOf, o
 		const mark =
 			section.status === 'failed'
 				? paint(glyph('cross', {ascii}), 'error', depth)
-				: paint(glyph('prompt', {ascii}), section.status === 'running' ? 'running' : 'accent', depth);
+				: paint(glyph(section.caller === undefined ? 'prompt' : 'toolAgent', {ascii}), section.status === 'running' ? 'running' : 'accent', depth);
 		out.push({
 			key: `${section.id}:head`,
 			text: fit(statusRow({mark, title: section.echo ?? '', right, width, depth}), width),
