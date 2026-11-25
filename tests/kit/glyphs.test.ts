@@ -61,3 +61,8 @@ test('todo glyph', () => {
 	assert.equal(glyph('todo'), '○');
 	assert.equal(glyph('todo', {ascii: true}), 'o');
 });
+
+test('shell glyph', () => {
+	assert.equal(glyph('shell'), '!');
+	assert.equal(glyph('shell', {ascii: true}), '!');
+});

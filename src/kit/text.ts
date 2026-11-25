@@ -2,6 +2,8 @@ export {graphemes, cellWidth, stringCells, truncateCells, sliceCells} from '../h
 export {sanitizeText, sanitizeBlock, sanitizeMultilineInput} from '../hints/sanitize.js';
 export {wrapRows, wrapLines, styledCells, sliceStyledCells, stripStyles} from '../transcript/wrap.js';
 export {tailRows, type TailRows} from './tail.js';
+export {scrubSecretEnv} from './env.js';
+export {createCapture, MAX_OUTPUT_CHARS, MAX_OUTPUT_LINES, type Capture, type CaptureLimits} from '../agent/capture.js';
 export {windowLine, indexAtCell, type Windowed} from '../hints/viewport.js';
 export {windowStart} from './window.js';
 export {inputRowCount, inputWindow, offsetAtCell, type InputWindowRow} from './input-window.js';

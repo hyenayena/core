@@ -146,3 +146,10 @@ test('the title bar tones have a background at every colour depth and are invers
 	assert.deepEqual(inkTone('titleBar.olive', 'truecolor'), {backgroundColor: '#808000', color: '#000000'});
 	assert.deepEqual(DARK_THEME['titleBar.blue'].c256, {fg: 231, bg: 25});
 });
+
+test('shell tone at every colour depth', () => {
+	assert.equal(toneSgr('shell', 'truecolor'), `${ESC}[38;2;253;93;177m`);
+	assert.equal(toneSgr('shell', '256'), `${ESC}[38;5;205m`);
+	assert.equal(toneSgr('shell', '16'), `${ESC}[35m`);
+	assert.equal(toneSgr('shell', 'none'), '');
+});
