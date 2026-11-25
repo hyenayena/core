@@ -1,16 +1,34 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
-import {COMMAND_TOOLS, formatCommandList, formatRunResult, resolveCommandLine} from '../../src/kit/text.js';
+import {
+	BATCH_MAX_LINES,
+	COMMAND_TOOLS,
+	formatBatchResult,
+	formatCommandList,
+	formatCommandTree,
+	formatRunResult,
+	resolveCommandLine,
+} from '../../src/kit/text.js';
 import type {CommandInfo} from '../../../../src/api.js';
 
 const HINT = 'Arguments and options: help <command> [subcommand…]. Quote an argument that holds spaces: "a b" or \'a b\'.';
+const LIST_HINT = `Subcommands: list_commands {"command": "<name>"}. ${HINT}`;
 
 test('tool specs are neutral JSON Schema', () => {
 	assert.equal(COMMAND_TOOLS.list_commands.name, 'list_commands');
-	assert.deepEqual(COMMAND_TOOLS.list_commands.inputSchema.properties, {});
+	assert.deepEqual(COMMAND_TOOLS.list_commands.inputSchema.properties, {
+		command: {type: 'string', maxLength: 200, description: 'Command name, optionally followed by subcommand words'},
+	});
+	assert.deepEqual(COMMAND_TOOLS.list_commands.inputSchema.required, []);
 	const run = COMMAND_TOOLS.run_command;
-	assert.deepEqual(run.inputSchema.required, ['command']);
+	assert.deepEqual(run.inputSchema.required, []);
 	assert.deepEqual(run.inputSchema.properties['command'], {type: 'string', maxLength: 4096, description: 'The full command line, command name first'});
+	assert.deepEqual(run.inputSchema.properties['commands'], {type: 'array', items: {type: 'string', maxLength: 4096}, minItems: 1, maxItems: BATCH_MAX_LINES});
+	assert.deepEqual(run.inputSchema.properties['stopOnError'], {type: 'boolean'});
+	const read = COMMAND_TOOLS.read_output;
+	assert.equal(read.name, 'read_output');
+	assert.deepEqual(read.inputSchema.required, ['id']);
+	assert.deepEqual(Object.keys(read.inputSchema.properties), ['id', 'from', 'lines', 'grep']);
 	assert.doesNotThrow(() => JSON.stringify(COMMAND_TOOLS));
 });
 
@@ -20,7 +38,7 @@ test('formatCommandList lists commands, subcommands and policies', () => {
 		{name: 'mod', description: 'Modules', usage: 'mod <sub>', policy: 'confirm', subcommands: [{name: 'list', aliases: ['ls'], usage: 'mod list', description: 'Show', policy: 'safe'}]},
 		{name: 'help', description: '', policy: 'safe', subcommands: []},
 	]);
-	assert.equal(text, `mod <sub> [confirm] - Modules\n  mod list (ls) [safe] - Show\nhelp [safe]\n${HINT}`);
+	assert.equal(text, `mod <sub> [confirm] - Modules (1 subcommand)\nhelp [safe]\n${LIST_HINT}`);
 });
 
 test('formatRunResult explains non-ok statuses and truncation', () => {
@@ -40,7 +58,7 @@ test('formatCommandList names the entries the assistant cannot run in one closin
 	]);
 	assert.equal(
 		text,
-		`claude [deny] - Claude\n  claude ping [confirm] - ping it\none [safe]\nNot available to the assistant (the user runs them): 2 claude subcommands, chat, 1 one subcommand.\n${HINT}`,
+		`claude [deny] - Claude (1 subcommand)\none [safe]\nNot available to the assistant (the user runs them): 2 claude subcommands, chat, 1 one subcommand.\n${LIST_HINT}`,
 	);
 });
 
@@ -69,19 +87,57 @@ const nested: CommandInfo[] = [
 	},
 ];
 
-test('formatCommandList indents nested subcommands, leaves out the builtin help and counts every denied node', () => {
+test('formatCommandList shows only the top level with a subcommand count and counts every denied node', () => {
 	assert.equal(
 		formatCommandList(nested),
 		[
+			'claude <subcommand> [confirm] - Claude (2 subcommands)',
+			'Not available to the assistant (the user runs them): 3 claude subcommands.',
+			LIST_HINT,
+		].join('\n'),
+	);
+	const declared = formatCommandList([{name: 'm', description: '', policy: 'safe', subcommands: [{name: 'help', aliases: [], usage: 'm help', description: 'Own help', policy: 'confirm'}]}]);
+	assert.match(declared, /^m \[safe\] \(1 subcommand\)$/m);
+});
+
+test('formatCommandTree indents the subcommands of one command, by name or alias', () => {
+	assert.deepEqual(formatCommandTree(nested, 'claude'), {
+		found: true,
+		text: [
 			'claude <subcommand> [confirm] - Claude',
 			'  claude auth <subcommand> (a) [confirm] - Auth',
 			'    claude auth status [safe] - Status',
 			'Not available to the assistant (the user runs them): 3 claude subcommands.',
-			HINT,
+			'Arguments and options: help claude [subcommand…]. Quote an argument that holds spaces: "a b" or \'a b\'.',
 		].join('\n'),
+	});
+	const auth = formatCommandTree(nested, ' claude   a ');
+	assert.equal(auth.found, true);
+	assert.match(auth.text, /^claude auth <subcommand> \(a\) \[confirm\] - Auth\n {2}claude auth status \[safe\] - Status\n/);
+	assert.match(auth.text, /1 claude auth subcommand\./);
+	assert.match(auth.text, /help claude auth \[subcommand…\]\./);
+});
+
+test('formatCommandTree refuses unknown and wholly denied paths', () => {
+	const unknown = formatCommandTree(nested, `claude${String.fromCharCode(27)}[31m nope`);
+	assert.equal(unknown.found, false);
+	assert.ok(!unknown.text.includes(String.fromCharCode(27)));
+	assert.match(unknown.text, /^Unknown command ".*"\. Call list_commands without arguments/);
+	assert.equal(formatCommandTree(nested, '').found, false);
+	assert.equal(formatCommandTree(nested, 'a b c d e f g h i').found, false);
+	const denied = formatCommandTree(nested, 'claude skills');
+	assert.equal(denied.found, false);
+	assert.match(denied.text, /is not available to the assistant \(the user runs it\)\.$/);
+});
+
+test('formatBatchResult labels each line with its position and status', () => {
+	assert.equal(
+		formatBatchResult([
+			{line: 'mod list', status: 'ok', text: 'a'},
+			{line: 'x', status: 'skipped', text: 'not run'},
+		]),
+		'[1/2 ok] mod list\na\n\n[2/2 skipped] x\nnot run',
 	);
-	const declared = formatCommandList([{name: 'm', description: '', policy: 'safe', subcommands: [{name: 'help', aliases: [], usage: 'm help', description: 'Own help', policy: 'confirm'}]}]);
-	assert.match(declared, /^ {2}m help \[confirm\] - Own help$/m);
 });
 
 test('resolveCommandLine walks names before aliases and takes the deepest listed policy', () => {

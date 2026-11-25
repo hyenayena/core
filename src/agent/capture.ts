@@ -1,6 +1,10 @@
 export const MAX_OUTPUT_CHARS = 24 * 1024;
 export const MAX_OUTPUT_LINES = 600;
 
+// The JSON-encoded worst case (3 bytes per UTF-16 unit) stays under claude's 1 MiB runner frame.
+export const BUFFERED_OUTPUT_CHARS = 192 * 1024;
+export const BUFFERED_OUTPUT_LINES = 4000;
+
 export type CaptureLimits = {chars: number; lines: number};
 
 export type Capture = {

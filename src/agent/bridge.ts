@@ -17,7 +17,7 @@ import {policyOf, walkPath} from '../hints/path.js';
 import {sanitizeBlock, sanitizeText, sanitizeToken} from '../hints/sanitize.js';
 import {unknownCommandLines} from '../hints/typo.js';
 import {errorLines, errorLogFields} from '../error-lines.js';
-import {createCapture} from './capture.js';
+import {BUFFERED_OUTPUT_CHARS, BUFFERED_OUTPUT_LINES, createCapture} from './capture.js';
 import {normalizeStyled, plainLines, type NormalStyled} from '../kit/styled.js';
 import type {ThemeTone} from '../kit/theme.js';
 import {LineError, parseLine} from '../parse-line.js';
@@ -25,6 +25,7 @@ import {isQuitLine} from '../view/keys.js';
 import type {AgentMode} from '../view/prefs.js';
 
 export const MAX_LINE = 4096;
+export const BUFFERED_CALLER = 'yena';
 export {MAX_OUTPUT_CHARS, MAX_OUTPUT_LINES} from './capture.js';
 export const DEFAULT_TIMEOUT_MS = 60_000;
 export const MIN_TIMEOUT_MS = 1_000;
@@ -111,7 +112,7 @@ export function createCommandBridge(deps: BridgeDeps): CommandBridge {
 		const caller = sanitizeToken(typeof req?.caller === 'string' ? req.caller : '', 40) || 'agent';
 		const meta: {command?: string; subcommand?: string; policy?: AgentPolicy; confirmed?: boolean} = {};
 		let outputChars = 0;
-		const output = createCapture();
+		const output = createCapture(caller === BUFFERED_CALLER ? {chars: BUFFERED_OUTPUT_CHARS, lines: BUFFERED_OUTPUT_LINES} : undefined);
 		let mounted = false;
 		let viewForced = false;
 		let running = false;

@@ -1,7 +1,15 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import type {Command, CommandRunResult} from '../../../../src/api.js';
-import {createCommandBridge, type AgentViewHandle, type BridgeDeps, MAX_OUTPUT_CHARS, MAX_OUTPUT_LINES} from '../../src/agent/bridge.js';
+import {
+	BUFFERED_CALLER,
+	createCommandBridge,
+	type AgentViewHandle,
+	type BridgeDeps,
+	MAX_OUTPUT_CHARS,
+	MAX_OUTPUT_LINES,
+} from '../../src/agent/bridge.js';
+import {BUFFERED_OUTPUT_CHARS, BUFFERED_OUTPUT_LINES} from '../../src/agent/capture.js';
 import {buildCatalog} from '../../src/hints/catalog.js';
 import {createRegistry} from '../../src/commands.js';
 import type {AgentMode} from '../../src/view/prefs.js';
@@ -177,6 +185,24 @@ test('caps: characters and lines set truncated and keep the end', async () => {
 	assert.equal(out.at(-1), `l${MAX_OUTPUT_LINES + 49}`);
 	const small = await run(setup({commands: [say('s', 'safe')]}), 's');
 	assert.equal(small.truncated, false);
+});
+
+test('caller yena gets the larger buffered caps; other callers keep the default', async () => {
+	const huge = say('huge', 'safe', Array.from({length: BUFFERED_OUTPUT_LINES + 500}, (_, i) => `l${i}`).join('\n'));
+	const wide = say('wide', 'safe', 'x'.repeat(MAX_OUTPUT_CHARS * 3));
+	const s = setup({commands: [huge, wide]});
+	const wideYena = await run(s, 'wide', {caller: BUFFERED_CALLER});
+	assert.equal(wideYena.truncated, false);
+	assert.ok(wideYena.output.length > MAX_OUTPUT_CHARS * 2);
+	const wideOther = await run(s, 'wide');
+	assert.equal(wideOther.truncated, true);
+	assert.ok(wideOther.output.length <= MAX_OUTPUT_CHARS + 64);
+	const hugeYena = await run(s, 'huge', {caller: BUFFERED_CALLER});
+	assert.equal(hugeYena.truncated, true);
+	assert.equal(hugeYena.output.split('\n').length, BUFFERED_OUTPUT_LINES + 1);
+	const big = await run(setup({commands: [say('big', 'safe', 'x'.repeat(BUFFERED_OUTPUT_CHARS + 500))]}), 'big', {caller: BUFFERED_CALLER});
+	assert.equal(big.truncated, true);
+	assert.ok(big.output.length <= BUFFERED_OUTPUT_CHARS + 64);
 });
 
 test('timeout returns the partial output, aborts the signal and keeps the lock until the command settles', async () => {
