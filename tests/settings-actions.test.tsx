@@ -6,6 +6,12 @@ import type {MountControl, Setting, SettingsTab} from '../../../src/api.js';
 import Settings from '../src/components/Settings.js';
 import {collectSettingsTabs} from '../src/view/settings-tabs.js';
 import {mountHarness} from './testkit.js';
+import {settingsTabs} from '../src/commands.js';
+import {timeZoneField} from '../src/view/time-zone-field.js';
+import {getPrefs, loadPrefs} from '../src/view/prefs.js';
+import {mkdtempSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
 
 const ESC = String.fromCharCode(27);
 const DOWN = `${ESC}[B`;
@@ -111,4 +117,29 @@ test('collectSettingsTabs strips a malformed inline but keeps the setting, and h
 		],
 	);
 	assert.equal('inline' in tab!.settings[2]!, false);
+});
+
+test('the Time zone action opens a field that saves a valid zone and refuses an unknown one', async () => {
+	loadPrefs(mkdtempSync(join(tmpdir(), 'core-time-zone-')));
+	const tabs = () => settingsTabs([], {openTimeZone: timeZoneField}).filter(t => t.title === 'Time');
+	const h = mountHarness(<Settings tabs={tabs()} control={{close() {}}} reload={tabs} />);
+	await h.settle();
+	h.press('\r');
+	await h.settle();
+	assert.match(h.lastFrame(), /Time zone/);
+	h.press('Nowhere/Land');
+	await h.settle();
+	h.press('\r');
+	await h.settle();
+	assert.match(h.lastFrame(), /Unknown time zone "Nowhere\/Land"/);
+	for (let i = 0; i < 12; i++) h.press('\x7f');
+	await h.settle();
+	h.press('Europe/Kyiv');
+	await h.settle();
+	h.press('\r');
+	await h.settle();
+	assert.equal(getPrefs().timeZone, 'Europe/Kyiv');
+	assert.match(h.lastFrame(), /Europe\/Kyiv/);
+	h.unmount();
+	loadPrefs(mkdtempSync(join(tmpdir(), 'core-time-zone-')));
 });

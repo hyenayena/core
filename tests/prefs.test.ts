@@ -102,3 +102,42 @@ test('settings tabs are sorted by title', () => {
 	const tabs = collectSettingsTabs([tab('Yena'), tab('appearance'), tab('Claude')]);
 	assert.deepEqual(tabs.map(t => t.title), ['appearance', 'Claude', 'Yena']);
 });
+
+test('timeZone is kept when valid, dropped when not, and cleared by undefined', () => {
+	const dir = tempDir();
+	loadPrefs(dir);
+	assert.equal('timeZone' in getPrefs(), false);
+	writeFileSync(join(dir, 'appearance.json'), '{"timeZone":"Europe/Kyiv"}');
+	assert.equal(loadPrefs(dir).timeZone, 'Europe/Kyiv');
+	for (const raw of ['"Bogus/Zone"', '5', 'null']) {
+		writeFileSync(join(dir, 'appearance.json'), `{"timeZone":${raw}}`);
+		assert.equal('timeZone' in loadPrefs(dir), false, raw);
+	}
+	setPrefs({timeZone: 'asia/tokyo'});
+	assert.equal(JSON.parse(readFileSync(join(dir, 'appearance.json'), 'utf8')).timeZone, 'Asia/Tokyo');
+	setPrefs({timeZone: undefined});
+	assert.equal('timeZone' in JSON.parse(readFileSync(join(dir, 'appearance.json'), 'utf8')), false);
+});
+
+test('the Time tab has a Time zone action that needs its form', () => {
+	const tab = settingsTabs([]).find(t => t.title === 'Time');
+	assert.ok(tab);
+	const action = tab.actions?.find(a => a.key === 'timeZone');
+	assert.equal(action?.label, 'Time zone…');
+	assert.match(action?.description ?? '', /UTC[+-]\d\d:\d\d\)/);
+	assert.throws(() => action?.open({close() {}}), /still loading/);
+	const opened = {};
+	const withForm = settingsTabs([], {openTimeZone: () => opened}).find(t => t.title === 'Time');
+	assert.equal(withForm?.actions?.[0]?.open({close() {}}), opened);
+});
+
+test('a hostile timeZone never reaches the stored preferences', () => {
+	const dir = tempDir();
+	loadPrefs(dir);
+	for (const bad of ['../x', 'Europe/Kyiv\nX=1', ':UTC', '', 'a'.repeat(65)]) {
+		writeFileSync(join(dir, 'appearance.json'), JSON.stringify({timeZone: bad}));
+		assert.equal('timeZone' in loadPrefs(dir), false, JSON.stringify(bad));
+		setPrefs({timeZone: bad});
+		assert.equal('timeZone' in JSON.parse(readFileSync(join(dir, 'appearance.json'), 'utf8')), false, JSON.stringify(bad));
+	}
+});

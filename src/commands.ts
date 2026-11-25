@@ -1,4 +1,4 @@
-import type {Command, CommandContext, EventBus, Logger, SettingsTab} from '../../../src/api.js';
+import type {Command, CommandContext, EventBus, Logger, MountControl, SettingsTab, UiElement} from '../../../src/api.js';
 import {reportReload, type ReloadNotice} from './kit/reload.js';
 import {runSourceOf} from './run-source.js';
 import {collectSettingsTabs} from './view/settings-tabs.js';
@@ -8,6 +8,7 @@ import {helpBlocks, helpError, helpLines} from './hints/help.js';
 import {MAX_STYLED_BLOCKS, printStyled} from './kit/styled.js';
 import {helpTarget} from './hints/path.js';
 import {commandError} from './kit/command-error.js';
+import {currentTimeZone, configuredTimeZone, formatUtcOffset, zonedParts} from './kit/time.js';
 import {noopLog} from './noop-log.js';
 import {createUiCommand} from './gallery/command.js';
 import {createTransferCommands, type TransferDeps} from './transfer/commands.js';
@@ -32,7 +33,29 @@ function assistantTab(): SettingsTab {
 	};
 }
 
-export const settingsTabs = (commands: Command[]): SettingsTab[] => [...collectSettingsTabs(commands), assistantTab()];
+function timeTab(openTimeZone?: (control: MountControl) => UiElement): SettingsTab {
+	return {
+		title: 'Time',
+		settings: [],
+		actions: [
+			{
+				key: 'timeZone',
+				label: 'Time zone…',
+				description: `${currentTimeZone()} (${formatUtcOffset(zonedParts(Date.now()).offsetMinutes)})${configuredTimeZone() ? '' : ', the system zone'} · the chat's current time and the scheduler's daily and cron jobs follow it`,
+				open: control => {
+					if (!openTimeZone) throw new Error('The form is still loading; open it again');
+					return openTimeZone(control);
+				},
+			},
+		],
+	};
+}
+
+export const settingsTabs = (commands: Command[], opts: {openTimeZone?: (control: MountControl) => UiElement} = {}): SettingsTab[] => [
+	...collectSettingsTabs(commands),
+	assistantTab(),
+	timeTab(opts.openTimeZone),
+];
 
 function appearanceTab(): SettingsTab {
 	return {
@@ -116,9 +139,14 @@ export function createRegistry(extra: Command[], log: Logger = noopLog, options:
 			settings: appearanceTab(),
 			run: async (_args, ctx) => {
 				if (!ctx.mount) throw new Error('"settings" needs an interface that can show views');
-				const [{createElement}, {default: Settings}] = await Promise.all([import('react'), import('./components/Settings.js')]);
-				const tabs = settingsTabs(commands);
-				await ctx.mount(control => createElement(Settings, {tabs, control, reload: () => settingsTabs(commands)}), {target: 'panel'});
+				const [{createElement}, {default: Settings}, {timeZoneField}] = await Promise.all([
+					import('react'),
+					import('./components/Settings.js'),
+					import('./view/time-zone-field.js'),
+				]);
+				const opts = {openTimeZone: timeZoneField};
+				const tabs = settingsTabs(commands, opts);
+				await ctx.mount(control => createElement(Settings, {tabs, control, reload: () => settingsTabs(commands, opts)}), {target: 'panel'});
 			},
 		},
 		{

@@ -121,6 +121,20 @@ export {
 	type Ansi16,
 	type InkToneProps,
 } from './theme.js';
+export {
+	MAX_TIME_ZONE_CHARS,
+	canonicalTimeZone,
+	systemTimeZone,
+	configuredTimeZone,
+	currentTimeZone,
+	withTimeZone,
+	zonedParts,
+	zonedTime,
+	formatUtcOffset,
+	formatLocalTime,
+	type ZonedParts,
+	type WallTime,
+} from './time.js';
 export {GLYPHS, SPINNER, glyph, spinnerFrames, spinnerFrame, asciiGlyphs, type GlyphDef, type GlyphName} from './glyphs.js';
 export {
 	COLUMN_BREAKPOINTS,
