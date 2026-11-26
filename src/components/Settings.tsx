@@ -23,7 +23,7 @@ type Line =
 	| {kind: 'description'; key: string; text: string}
 	| {kind: 'section'; key: string; text: string}
 	| {kind: 'inline'; key: string; label: string; section?: string; fields: Field[]}
-	| {kind: 'option'; key: string; text: string; detail: string; at: number; chosen: boolean}
+	| {kind: 'option'; key: string; text: string; detail: string; at: number; chosen: boolean; readOnly: boolean}
 	| {kind: 'action'; key: string; text: string; detail: string; at: number};
 
 const clean = (text: unknown) => sanitizeText(text, TEXT_MAX);
@@ -68,6 +68,7 @@ function layoutOf(tab: SettingsTab | undefined, value: (setting: Setting) => str
 				detail: option.description ? ` — ${clean(option.description)}` : '',
 				at: options.length,
 				chosen: option.value === current,
+				readOnly: Boolean(setting.readOnly),
 			});
 			options.push({setting, index});
 		});
@@ -186,6 +187,10 @@ export default function Settings({tabs: initial, control, reload}: {tabs: Settin
 
 	const save = (row: Option) => {
 		if ('action' in row) return openAction(row.action);
+		if (row.setting.readOnly) {
+			setStatus({text: clean(row.setting.readOnly), error: true});
+			return;
+		}
 		const option = row.setting.options['cycle' in row ? nextIndex(row.setting) : row.index];
 		if (!option || saving.current) return;
 		saving.current = true;
@@ -292,7 +297,7 @@ export default function Settings({tabs: initial, control, reload}: {tabs: Settin
 				if (line.kind === 'inline') {
 					return row(
 						line.key,
-						<Text wrap="truncate-end">
+						<Text wrap="truncate-end" dimColor={line.fields.every(f => Boolean(f.setting.readOnly))}>
 							{(segments.get(line.key) ?? []).map((segment, i) => (
 								<Text key={i} inverse={segment.focused === true && focused}>
 									{segment.text}
@@ -313,7 +318,7 @@ export default function Settings({tabs: initial, control, reload}: {tabs: Settin
 				}
 				return row(
 					line.key,
-					<Text wrap="truncate-end" inverse={selected && focused}>
+					<Text wrap="truncate-end" inverse={selected && focused} dimColor={line.readOnly}>
 						{fit(`${selected ? '›' : ' '} ${line.chosen ? '●' : '○'} ${line.text}`)}
 						<Text dimColor>{line.detail}</Text>
 					</Text>,

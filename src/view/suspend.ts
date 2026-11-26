@@ -1,3 +1,5 @@
+import {countRawWrite} from '../kit/frame-metrics.js';
+
 const ESC = String.fromCharCode(27);
 const LEAVE = `${ESC}[?1049l${ESC}[?25h${ESC}[?2004l`;
 const RETURN = `${ESC}[?1049h${ESC}[2J${ESC}[H${ESC}[?25l${ESC}[?2004h`;
@@ -39,7 +41,10 @@ export async function suspendTerminal<T>(
 		};
 		step(() => stdin.setRawMode?.(wasRaw));
 		for (const r of readers) stdin.on('readable', r);
-		step(() => stdout.write(RETURN));
+		step(() => {
+			stdout.write(RETURN);
+			countRawWrite();
+		});
 		step(() => mouse?.resume());
 		step(() => stdout.emit('resize'));
 		return failure;
@@ -48,6 +53,7 @@ export async function suspendTerminal<T>(
 	try {
 		mouse?.pause();
 		stdout.write(LEAVE);
+		countRawWrite();
 		result = await fn();
 	} catch (error) {
 		restore();

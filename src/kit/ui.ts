@@ -11,4 +11,5 @@ export {TextField, type TextFieldProps} from './TextField.js';
 export {Form, type FormProps, type FormField, type FormButton, type FormValue} from './Form.js';
 export {LabeledInput, labeledInputRows, type LabeledInputProps} from './LabeledInput.js';
 export {SpanRows, type SpanRowsProps} from './SpanRows.js';
+export {createFrameMetrics, startFrameMetrics, frameMetrics, startFrameTurn, countRawWrite, FRAME_IDLE_MS, type FrameMetrics, type FrameTurn, type FrameTimers} from './frame-metrics.js';
 export {colorEnabled} from '../hints/style.js';

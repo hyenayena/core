@@ -51,6 +51,7 @@ import {ViewLayoutContext} from './view/use-view-host.js';
 import {copyToClipboard} from './view/clipboard.js';
 import {actionAt, cleanActions} from './transcript/actions.js';
 import {suspendTerminal} from './view/suspend.js';
+import {frameMetrics} from './kit/frame-metrics.js';
 import {DEFAULT_PREFS, getPrefs, setPrefs, subscribePrefs} from './view/prefs.js';
 import {areaAt, inside, toLocal, wheelDelta, type Rect} from './mouse/hit.js';
 import type {MouseInputEvent} from './mouse/sgr.js';
@@ -875,6 +876,11 @@ export default function App({
 	const headerRef = useRef<DOMElement>(null);
 	const consoleBodyRef = useRef<DOMElement>(null);
 	const panelOutputRef = useRef<DOMElement>(null);
+	// The dynamic part of the screen; the transcript takes the remaining rows.
+	useEffect(() => {
+		const height = (ref: {current: DOMElement | null}): number => (ref.current ? measureElement(ref.current).height : 0);
+		return frameMetrics().setLiveHeightProbe(() => (mainViewRef.current ? height(headerRef) + height(mainViewRef) : height(consoleBodyRef)));
+	}, []);
 	const shownPanelRows = useRef<readonly PanelRow[]>([]);
 	const dispatchToView = (target: MountTarget, e: MouseInputEvent, rect: Rect, region?: 'header'): boolean => {
 		const mountId = pending.current[target]?.id;

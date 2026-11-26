@@ -7,8 +7,10 @@ import {APP_TITLE, setTerminalTitle} from './view/title.js';
 import {loadPrefs} from './view/prefs.js';
 import {createInputProxy} from './mouse/input.js';
 import {createMouseTerminal} from './mouse/terminal.js';
+import {frameMetrics, startFrameMetrics} from './kit/frame-metrics.js';
 
 const main: ModuleMain = yena => {
+	startFrameMetrics({log: yena.log});
 	setTerminalTitle(process.stdout, APP_TITLE);
 	loadPrefs(yena.dataDir);
 	const registry = createRegistry(yena.commands, yena.log, {transfer: {modules: yena.modules, build: yena.build, dataDir: yena.dataDir, log: yena.log}, events: yena.events, ...(yena.reload && {reload: yena.reload})});
@@ -18,6 +20,7 @@ const main: ModuleMain = yena => {
 	render(<App registry={registry} log={yena.log} mouse={mouse} alerts={yena.alerts} events={yena.events} />, {
 		...(proxy ? {stdin: proxy.stream as unknown as NodeJS.ReadStream} : {}),
 		exitOnCtrlC: false,
+		onRender: ({renderTime}: {renderTime: number}) => frameMetrics().render(renderTime),
 		alternateScreen: true,
 		// UI-9: rewrite only changed rows; a full erase + rewrite per frame flickers in terminals without synchronized output (macOS Terminal).
 		incrementalRendering: true,

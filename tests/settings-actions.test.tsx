@@ -143,3 +143,51 @@ test('the Time zone action opens a field that saves a valid zone and refuses an 
 	h.unmount();
 	loadPrefs(mkdtempSync(join(tmpdir(), 'core-time-zone-')));
 });
+
+test('a read-only setting shows the reason on Enter and never calls set', async () => {
+	let sets = 0;
+	const reason = 'Set by YENA_LOG_LEVEL in the environment; unset it and restart yena to change it here';
+	const raw: SettingsTab = {
+		title: 'T',
+		settings: [
+			{key: 'a', label: 'Log level', options: [{value: 'info', label: 'info'}, {value: 'debug', label: 'debug'}], get: () => 'info', set: () => void sets++, readOnly: reason},
+			{key: 'b', label: 'Other', options: [{value: 'x', label: 'x'}], get: () => 'x', set: () => void sets++, readOnly: ''},
+		],
+	};
+	const [tab] = collectSettingsTabs([{name: 'c', description: 'd', settings: raw, run() {}}]);
+	assert.equal(tab!.settings[0]!.readOnly, reason);
+	assert.equal(tab!.settings[1]!.readOnly, undefined);
+	const h = mountHarness(<Settings tabs={[tab!]} control={{close() {}}} />);
+	await h.settle();
+	h.press(DOWN);
+	await h.settle();
+	h.press('\r');
+	await h.settle();
+	assert.match(h.lastFrame(), /Set by YENA_LOG_LEVEL in the environment/);
+	assert.equal(sets, 0);
+	h.unmount();
+});
+
+test('a read-only row is drawn dimmed and an ordinary one is not', async () => {
+	const {default: chalk} = await import('chalk');
+	chalk.level = 1;
+	try {
+		const raw: SettingsTab = {
+			title: 'T',
+			settings: [
+				{key: 'a', label: 'Fixed', options: [{value: 'info', label: 'info'}], get: () => 'info', set: () => {}, readOnly: 'Set elsewhere'},
+				{key: 'b', label: 'Free', options: [{value: 'x', label: 'x'}], get: () => 'x', set: () => {}},
+			],
+		};
+		const [tab] = collectSettingsTabs([{name: 'c', description: 'd', settings: raw, run() {}}]);
+		const h = mountHarness(<Settings tabs={[tab!]} control={{close() {}}} />);
+		await h.settle();
+		const frame = h.lastFrame();
+		const lineOf = (label: string) => frame.split('\n').find(l => l.includes(label))!;
+		assert.ok(lineOf('● info').includes(`${ESC}[2m`), 'the read-only option row is dim');
+		assert.ok(!lineOf('● x').includes(`${ESC}[2m`), 'an ordinary row is not');
+		h.unmount();
+	} finally {
+		chalk.level = 0;
+	}
+});

@@ -1,5 +1,6 @@
 import {mkdirSync, renameSync, writeFileSync} from 'node:fs';
 import path from 'node:path';
+import {countRawWrite} from '../kit/frame-metrics.js';
 
 const ESC = String.fromCharCode(27);
 const BEL = String.fromCharCode(7);
@@ -36,6 +37,7 @@ export function copyToClipboard(
 	let ok = false;
 	try {
 		stream.write(clipboardSequence(text));
+		countRawWrite();
 		ok = true;
 	} catch {
 	}

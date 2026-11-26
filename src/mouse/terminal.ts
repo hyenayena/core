@@ -1,4 +1,5 @@
 import type {InputProxy} from './input.js';
+import {countRawWrite} from '../kit/frame-metrics.js';
 import type {MouseInputEvent} from './sgr.js';
 
 const ESC = String.fromCharCode(27);
@@ -29,6 +30,7 @@ export function createMouseTerminal(
 		active = next;
 		try {
 			stdout.write(next ? MOUSE_ENABLE : MOUSE_DISABLE);
+			countRawWrite();
 		} catch {
 		}
 	};

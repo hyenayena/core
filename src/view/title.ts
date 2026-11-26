@@ -1,3 +1,4 @@
+import {countRawWrite} from '../kit/frame-metrics.js';
 import {sanitizeText} from '../hints/sanitize.js';
 
 const ESC = String.fromCharCode(27);
@@ -13,6 +14,7 @@ export function setTerminalTitle(stream: {isTTY?: boolean; write: (s: string) =>
 	if (!stream.isTTY) return;
 	try {
 		stream.write(titleSequence(title));
+		countRawWrite();
 	} catch {
 	}
 }

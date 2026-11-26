@@ -15,9 +15,9 @@ function validSetting(raw: unknown): Setting | undefined {
 		.filter(o => o && typeof o === 'object' && typeof o.value === 'string' && isText(o.label))
 		.slice(0, MAX_OPTIONS);
 	if (options.length === 0) return undefined;
-	const {inline: _inline, ...rest} = s as Setting;
+	const {inline: _inline, readOnly: _readOnly, ...rest} = s as Setting;
 	const inline = validInline(s.inline);
-	return {...rest, options, ...(inline && {inline})};
+	return {...rest, options, ...(inline && {inline}), ...(isText(s.readOnly) && {readOnly: s.readOnly})};
 }
 
 function validInline(raw: unknown): SettingInline | undefined {
