@@ -6,7 +6,8 @@ import type {MountControl, Setting, SettingsTab} from '../../../src/api.js';
 import Settings from '../src/components/Settings.js';
 import {collectSettingsTabs} from '../src/view/settings-tabs.js';
 import {mountHarness} from './testkit.js';
-import {settingsTabs} from '../src/commands.js';
+import {createRegistry, settingsTabs} from '../src/commands.js';
+import {resetMotionForTests} from '../src/kit/motion.js';
 import {timeZoneField} from '../src/view/time-zone-field.js';
 import {getPrefs, loadPrefs} from '../src/view/prefs.js';
 import {mkdtempSync} from 'node:fs';
@@ -190,4 +191,21 @@ test('a read-only row is drawn dimmed and an ordinary one is not', async () => {
 	} finally {
 		chalk.level = 0;
 	}
+});
+
+test('the Motion row is read-only while YENA_MOTION decides', () => {
+	const saved = process.env['YENA_MOTION'];
+	process.env['YENA_MOTION'] = 'off';
+	resetMotionForTests();
+	try {
+		const row = settingsTabs(createRegistry([]).commands).find(t => t.title === 'Appearance')!.settings.find(s => s.key === 'motion')!;
+		assert.match(String(row.readOnly), /Set by YENA_MOTION in the environment/);
+		assert.equal(row.get(), 'reduced');
+	} finally {
+		if (saved === undefined) delete process.env['YENA_MOTION'];
+		else process.env['YENA_MOTION'] = saved;
+		resetMotionForTests();
+	}
+	const free = settingsTabs(createRegistry([]).commands).find(t => t.title === 'Appearance')!.settings.find(s => s.key === 'motion')!;
+	assert.equal(free.readOnly, undefined);
 });

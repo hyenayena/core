@@ -157,6 +157,8 @@ export {
 	type ZonedParts,
 	type WallTime,
 } from './time.js';
+export {FRAME_MS, createFrameClock, frameClock, type ClockTimers, type FrameClock, type FrameClockOptions} from './frame-clock.js';
+export {MOTION_ENV, motionFromEnv, reducedMotion, motionFixedBy, subscribeMotion, setMotionPref, withReducedMotion} from './motion.js';
 export {GLYPHS, SPINNER, glyph, spinnerFrames, spinnerFrame, asciiGlyphs, type GlyphDef, type GlyphName} from './glyphs.js';
 export {
 	COLUMN_BREAKPOINTS,

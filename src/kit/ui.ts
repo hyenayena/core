@@ -1,6 +1,7 @@
 export {useTerminalSize, type TerminalSize} from './terminal-size.js';
 export {useViewHost, type ViewLayout} from '../view/use-view-host.js';
 export {Spinner, useSpinner, useSpinnerTick} from './Spinner.js';
+export {useFrame, useFrameDeadline, useReducedMotion} from './use-frame.js';
 export {ListPicker, type ListPickerProps} from './ListPicker.js';
 export {StatusBar} from './StatusBar.js';
 export {Frame} from './Frame.js';
@@ -11,5 +12,5 @@ export {TextField, type TextFieldProps} from './TextField.js';
 export {Form, type FormProps, type FormField, type FormButton, type FormValue} from './Form.js';
 export {LabeledInput, labeledInputRows, type LabeledInputProps} from './LabeledInput.js';
 export {SpanRows, type SpanRowsProps} from './SpanRows.js';
-export {createFrameMetrics, startFrameMetrics, frameMetrics, startFrameTurn, countRawWrite, FRAME_IDLE_MS, type FrameMetrics, type FrameTurn, type FrameTimers} from './frame-metrics.js';
+export {createFrameMetrics, startFrameMetrics, frameMetrics, startFrameTurn, countRawWrite, countInput, countClockTick, FRAME_IDLE_MS, type FrameMetrics, type FrameTurn, type FrameTimers} from './frame-metrics.js';
 export {colorEnabled} from '../hints/style.js';

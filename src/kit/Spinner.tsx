@@ -1,13 +1,14 @@
-import React, {useSyncExternalStore} from 'react';
+import React from 'react';
 import {Text} from 'ink';
-import {asciiGlyphs, spinnerFrame} from './glyphs.js';
-import {spinnerClock} from './spinner-clock.js';
+import {asciiGlyphs, SPINNER, spinnerFrame} from './glyphs.js';
+import {useFrame, useReducedMotion} from './use-frame.js';
 
-const noopSubscribe = (): (() => void) => () => {};
-const readIdle = (): number => 0;
+export const SPINNER_REDUCED_PACE_MS = 1000;
 
 export function useSpinnerTick(active = true): number {
-	return useSyncExternalStore(active ? spinnerClock.subscribe : noopSubscribe, active ? spinnerClock.tick : readIdle);
+	const reduced = useReducedMotion();
+	const t = useFrame(active, reduced ? SPINNER_REDUCED_PACE_MS : SPINNER.intervalMs);
+	return reduced ? 0 : Math.floor(t / SPINNER.intervalMs);
 }
 
 export function useSpinner(active = true): string {

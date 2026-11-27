@@ -4,6 +4,8 @@ import {asciiGlyphs} from '../kit/glyphs.js';
 import {inkTone} from '../kit/theme.js';
 import {panelTitleRow} from '../panel/title.js';
 import type {PanelRow} from '../panel/sections.js';
+import ActivityLine from './ActivityLine.js';
+import type {ActivityReport} from '../kit/activity.js';
 import {scrollHint} from './Transcript.js';
 import {sliceStyledCells, styledCells} from '../transcript/wrap.js';
 
@@ -18,7 +20,7 @@ export type ConsolePanelProps = {
 	dragging: boolean;
 	split: boolean;
 	folds: 'unfold' | 'fold' | undefined;
-	activity: string;
+	activity: readonly ActivityReport[];
 	hasView: boolean;
 	rows: readonly PanelRow[];
 	newer: number;
@@ -52,9 +54,9 @@ export default function ConsolePanel(p: ConsolePanelProps) {
 			<Box flexShrink={0}>
 				<Text wrap="truncate-end">{title}</Text>
 			</Box>
-			{!p.hasView && p.activity !== '' && (
+			{!p.hasView && p.activity.length > 0 && (
 				<Box flexShrink={0}>
-					<Text wrap="truncate-end">{p.activity}</Text>
+					<ActivityLine items={p.activity} width={p.width} />
 				</Box>
 			)}
 			{!p.hasView && (

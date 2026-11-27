@@ -9,6 +9,7 @@ import {MAX_STYLED_BLOCKS, printStyled} from './kit/styled.js';
 import {helpTarget} from './hints/path.js';
 import {commandError} from './kit/command-error.js';
 import {currentTimeZone, configuredTimeZone, formatUtcOffset, zonedParts} from './kit/time.js';
+import {MOTION_ENV, motionFixedBy, reducedMotion} from './kit/motion.js';
 import {noopLog} from './noop-log.js';
 import {createUiCommand} from './gallery/command.js';
 import {createTransferCommands, type TransferDeps} from './transfer/commands.js';
@@ -58,6 +59,7 @@ export const settingsTabs = (commands: Command[], opts: {openTimeZone?: (control
 ];
 
 function appearanceTab(): SettingsTab {
+	const fixedBy = motionFixedBy();
 	return {
 		title: 'Appearance',
 		settings: [
@@ -79,6 +81,20 @@ function appearanceTab(): SettingsTab {
 				],
 				get: () => (getPrefs().colors ? 'on' : 'off'),
 				set: value => setPrefs({colors: value !== 'off'}),
+			},
+			{
+				key: 'motion',
+				label: 'Motion',
+				description: fixedBy
+					? `Spinners, the status bar shimmer and the chat banner intro; set by ${fixedBy} in the environment`
+					: `Spinners, the status bar shimmer and the chat banner intro; Reduced shows them still (${MOTION_ENV}=off also reduces them)`,
+				options: [
+					{value: 'full', label: 'Full'},
+					{value: 'reduced', label: 'Reduced'},
+				],
+				get: () => (fixedBy ? (reducedMotion() ? 'reduced' : 'full') : getPrefs().motion),
+				set: value => setPrefs({motion: value === 'reduced' ? 'reduced' : 'full'}),
+				...(fixedBy && {readOnly: `Set by ${fixedBy} in the environment; unset it and restart yena to change it here`}),
 			},
 			{
 				key: 'mouse',

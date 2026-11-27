@@ -18,6 +18,8 @@ export interface FrameMetrics {
 	readonly enabled: boolean;
 	render(renderTimeMs: number): void;
 	rawWrite(): void;
+	input(): void;
+	clockTick(): void;
 	setLiveHeightProbe(probe: () => number): () => void;
 	turn(): FrameTurn;
 	stop(): void;
@@ -53,6 +55,8 @@ interface Window {
 	queue: number[];
 	heightChanges: number;
 	rawWrites: number;
+	inputs: number;
+	clockTicks: number;
 }
 
 const globalTimers: FrameTimers = {
@@ -66,12 +70,14 @@ const DISABLED: FrameMetrics = {
 	enabled: false,
 	render() {},
 	rawWrite() {},
+	input() {},
+	clockTick() {},
 	setLiveHeightProbe: () => () => {},
 	turn: () => NOOP_TURN,
 	stop() {},
 };
 
-const freshWindow = (start: number): Window => ({start, renders: 0, frameMaxMs: 0, frameTotalMs: 0, peak: 0, queue: [], heightChanges: 0, rawWrites: 0});
+const freshWindow = (start: number): Window => ({start, renders: 0, frameMaxMs: 0, frameTotalMs: 0, peak: 0, queue: [], heightChanges: 0, rawWrites: 0, inputs: 0, clockTicks: 0});
 const round1 = (n: number): number => Math.round(n * 10) / 10;
 
 export function createFrameMetrics(opts: FrameMetricsOptions): FrameMetrics {
@@ -95,6 +101,8 @@ export function createFrameMetrics(opts: FrameMetricsOptions): FrameMetrics {
 			frameAvgMs: w.renders === 0 ? 0 : round1(w.frameTotalMs / w.renders),
 			heightChanges: w.heightChanges,
 			rawWrites: w.rawWrites,
+			inputs: w.inputs,
+			clockTicks: w.clockTicks,
 			...(kind === 'turn' && {outcome: outcome !== undefined && OUTCOME_PATTERN.test(outcome) ? outcome : 'other'}),
 		});
 	};
@@ -140,6 +148,14 @@ export function createFrameMetrics(opts: FrameMetricsOptions): FrameMetrics {
 			if (stopped) return;
 			for (const w of targets()) w.rawWrites++;
 		},
+		input() {
+			if (stopped) return;
+			for (const w of targets()) w.inputs++;
+		},
+		clockTick() {
+			if (stopped) return;
+			for (const w of targets()) w.clockTicks++;
+		},
 		setLiveHeightProbe(probe) {
 			probes.push(probe);
 			return () => {
@@ -184,6 +200,8 @@ const facade: FrameMetrics = {
 	},
 	render: ms => current.render(ms),
 	rawWrite: () => current.rawWrite(),
+	input: () => current.input(),
+	clockTick: () => current.clockTick(),
 	turn: () => current.turn(),
 	setLiveHeightProbe(probe) {
 		const entry = {probe, detach: current.setLiveHeightProbe(probe)};
@@ -224,3 +242,5 @@ export function startFrameMetrics(opts: StartFrameMetricsOptions = {}): FrameMet
 export const frameMetrics = (): FrameMetrics => facade;
 export const startFrameTurn = (): FrameTurn => facade.turn();
 export const countRawWrite = (): void => facade.rawWrite();
+export const countInput = (): void => facade.input();
+export const countClockTick = (): void => facade.clockTick();

@@ -141,3 +141,15 @@ test('a hostile timeZone never reaches the stored preferences', () => {
 		assert.equal('timeZone' in JSON.parse(readFileSync(join(dir, 'appearance.json'), 'utf8')), false, JSON.stringify(bad));
 	}
 });
+
+test('motion defaults to full and an invalid value falls back', () => {
+	const dir = tempDir();
+	assert.equal(loadPrefs(dir).motion, 'full');
+	for (const raw of ['"off"', '1', 'null']) {
+		writeFileSync(join(dir, 'appearance.json'), `{"motion":${raw}}`);
+		assert.equal(loadPrefs(dir).motion, 'full', raw);
+	}
+	writeFileSync(join(dir, 'appearance.json'), '{"motion":"reduced"}');
+	assert.equal(loadPrefs(dir).motion, 'reduced');
+	loadPrefs(tempDir());
+});

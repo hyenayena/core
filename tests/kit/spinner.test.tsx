@@ -3,6 +3,8 @@ import {test} from 'node:test';
 import React from 'react';
 import {Text} from 'ink';
 import {Spinner, useSpinner} from '../../src/kit/ui.js';
+import {setMotionPref} from '../../src/kit/text.js';
+import {resetMotionForTests} from '../../src/kit/motion.js';
 import {spinnerClock} from '../../src/kit/spinner-clock.js';
 import {mountHarness, wait} from '../testkit.js';
 
@@ -98,4 +100,22 @@ test('toggling active true, false, true leaks no timer or subscriber', async () 
 	});
 	assert.equal(started, 2);
 	assert.equal(spinnerClock.size(), 0);
+});
+
+test('reduced motion shows the static frame and re-renders at a one second pace', async () => {
+	const h = mountHarness(<Probe active />);
+	await h.settle();
+	setMotionPref(true);
+	try {
+		await wait(60);
+		assert.equal(text(h.lastFrame()), '[⣾]');
+		const before = h.frameCount();
+		await wait(1300);
+		assert.ok(h.frameCount() - before <= 2);
+		assert.equal(text(h.lastFrame()), '[⣾]');
+	} finally {
+		setMotionPref(false);
+		resetMotionForTests();
+		h.unmount();
+	}
 });

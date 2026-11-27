@@ -1,4 +1,5 @@
 import {Readable} from 'node:stream';
+import {countInput} from '../kit/frame-metrics.js';
 import {createMouseTokenizer, decode, type MouseInputEvent} from './sgr.js';
 
 export type InputSource = {
@@ -102,6 +103,7 @@ export function createInputProxy(
 	};
 
 	const handle = (chunk: string) => {
+		countInput();
 		cancelTimer();
 		const result = tokenizer.push(chunk);
 		if (result.text) stream.push(result.text);

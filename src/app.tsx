@@ -32,11 +32,9 @@ import {LineError, parseLine} from './parse-line.js';
 import {createCommandBridge, type AgentViewHandle} from './agent/bridge.js';
 import {unknownCommandLines} from './hints/typo.js';
 import {asciiGlyphs, glyph} from './kit/glyphs.js';
-import {useSpinnerTick} from './kit/Spinner.js';
 import {
 	ACTIVITY_TOPIC,
 	EMPTY_ACTIVITY,
-	activityRow,
 	applyActivity,
 	nextActivityChange,
 	readActivity,
@@ -235,7 +233,6 @@ export default function App({
 	const activityItems = visibleActivity(feedRef.current, Date.now());
 	const activityShown = side && panelOpen && panelView === null && activityItems.length > 0;
 	const useAscii = asciiGlyphs(process.env);
-	const spinTick = useSpinnerTick(panelOpen && activityItems.some(i => i.state === 'running'));
 
 	const panelViewRows = side ? Math.max(1, geo.panelRows - 1) : Math.max(1, rows - 1);
 	const panelOutputRows = Math.max(0, geo.panelRows - 4 - (activityShown ? 1 : 0));
@@ -1118,11 +1115,7 @@ export default function App({
 				dragging={dragShare !== null}
 				split={geo.split}
 				folds={hasFolds(sections) ? (expandAll ? 'fold' : 'unfold') : undefined}
-				activity={
-					activityShown
-						? activityRow(activityItems, panelWidth, {frame: spinTick, ascii: useAscii})
-						: ''
-				}
+				activity={activityShown ? activityItems : []}
 				hasView={panelView !== null}
 				rows={shown}
 				newer={newer}

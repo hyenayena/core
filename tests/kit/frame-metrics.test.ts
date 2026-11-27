@@ -12,6 +12,8 @@ import {
 import {setTerminalTitle} from '../../src/view/title.js';
 import {copyToClipboard} from '../../src/view/clipboard.js';
 import {createMouseTerminal} from '../../src/mouse/terminal.js';
+import {createInputProxy} from '../../src/mouse/input.js';
+import {createFakeTty} from '../testkit.js';
 import {suspendTerminal} from '../../src/view/suspend.js';
 
 type Rec = {msg: string; fields: Record<string, unknown> | undefined};
@@ -121,8 +123,21 @@ describe('frame metrics', () => {
 			frameAvgMs: 3.1,
 			heightChanges: 0,
 			rawWrites: 1,
+			inputs: 0,
+			clockTicks: 0,
 			outcome: 'ok',
 		});
+	});
+
+	test('inputs and clock ticks are counted into the open window', () => {
+		const s = setup();
+		const turn = s.metrics.turn();
+		s.metrics.input();
+		s.metrics.input();
+		s.metrics.clockTick();
+		turn.end('ok');
+		assert.equal(s.records[0]!.fields!.inputs, 2);
+		assert.equal(s.records[0]!.fields!.clockTicks, 1);
 	});
 
 	test('drop logs nothing', () => {
@@ -425,5 +440,22 @@ describe('raw write sites', () => {
 			await suspendTerminal(stdin as never, stdout as never, async () => {});
 		});
 		assert.equal(n, 2);
+	});
+});
+
+describe('input sites', () => {
+	test('the input proxy counts one input per chunk', async () => {
+		const s = setup();
+		startFrameMetrics(s.opts);
+		const turn = startFrameTurn();
+		const tty = createFakeTty();
+		const proxy = createInputProxy(tty, {size: () => ({columns: 80, rows: 24})});
+		proxy.stream.on('readable', () => void proxy.stream.read());
+		tty.write('a');
+		await new Promise(resolve => setImmediate(resolve));
+		tty.write('bc');
+		await new Promise(resolve => setImmediate(resolve));
+		turn.end('ok');
+		assert.equal(s.records[0]!.fields!.inputs, 2);
 	});
 });
