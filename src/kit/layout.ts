@@ -30,6 +30,14 @@ export function fixedRowBudget(rows: number, share: number = FIXED_SHARE): numbe
 	return Math.min(liveRowCap(rows), Math.floor(rowsOrDefault(rows) * s));
 }
 
+// A row count that grows in steps and never shrinks, so a live area does not jitter.
+export function heldRows(held: number, wanted: number, options: {step?: number; max?: number} = {}): number {
+	const n = (v: number): number => (Number.isFinite(v) ? Math.max(0, v) : 0);
+	const step = Math.max(1, Math.floor(n(options.step ?? 1)));
+	const max = options.max === undefined || Number.isNaN(options.max) ? Infinity : n(options.max);
+	return Math.max(n(held), Math.min(max, Math.ceil(n(wanted) / step) * step));
+}
+
 export type RowPart = {
 	id: string;
 	min: number;

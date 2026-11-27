@@ -169,6 +169,7 @@ export {
 	liveRowCap,
 	fixedRowBudget,
 	allocateRows,
+	heldRows,
 	type ColumnTier,
 	type RowTier,
 	type RowPart,

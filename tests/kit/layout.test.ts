@@ -6,6 +6,7 @@ import {
 	allocateRows,
 	columnTier,
 	fixedRowBudget,
+	heldRows,
 	liveRowCap,
 	rowTier,
 	type RowPart,
@@ -97,4 +98,21 @@ test('NaN and negative inputs are treated as zero', () => {
 	assert.equal(b.budget, 0);
 	assert.equal(b.used, 0);
 	assert.equal(allocateRows(parts(), 20, {budget: 999}).budget, liveRowCap(20));
+});
+
+test('heldRows grows in steps, never shrinks and respects the cap', () => {
+	assert.equal(heldRows(0, 3), 3);
+	assert.equal(heldRows(0, 3, {step: 4}), 4);
+	assert.equal(heldRows(4, 5, {step: 4}), 8);
+	assert.equal(heldRows(8, 2, {step: 4}), 8);
+	assert.equal(heldRows(0, 30, {step: 4, max: 10}), 10);
+	assert.equal(heldRows(12, 30, {max: 10}), 12);
+});
+
+test('heldRows treats junk input as zero', () => {
+	assert.equal(heldRows(NaN, NaN), 0);
+	assert.equal(heldRows(-3, -1), 0);
+	assert.equal(heldRows(0, 5, {step: 0}), 5);
+	assert.equal(heldRows(0, 5, {step: NaN}), 5);
+	assert.equal(heldRows(0, Infinity, {max: 6}), 0);
 });
