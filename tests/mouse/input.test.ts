@@ -146,6 +146,30 @@ test('setRawMode, isRaw, ref, unref and setEncoding are forwarded', () => {
 	assert.throws(() => proxy.stream.setEncoding('latin1'), /Unsupported input encoding/);
 });
 
+test('while held a failing setRawMode does not throw and release returns the first error', () => {
+	const tty = createFakeTty();
+	const errors = [new Error('first'), new Error('second')];
+	tty.setRawMode = () => {
+		throw errors.shift() ?? new Error('later');
+	};
+	const proxy = createInputProxy(tty);
+	assert.throws(() => proxy.stream.setRawMode(true), /later|first/);
+	const release = proxy.holdRawModeErrors();
+	assert.equal(proxy.stream.setRawMode(true), proxy.stream);
+	assert.equal(proxy.stream.setRawMode(false), proxy.stream);
+	const held = release() as Error;
+	assert.equal(held.message, 'second');
+	assert.equal(release(), undefined);
+	assert.throws(() => proxy.stream.setRawMode(true), /later/);
+});
+
+test('releasing a hold without failures returns undefined', () => {
+	const proxy = createInputProxy(createFakeTty());
+	const release = proxy.holdRawModeErrors();
+	proxy.stream.setRawMode(true);
+	assert.equal(release(), undefined);
+});
+
 test('the source is read only while the proxy has a readable listener', async () => {
 	const s = setup(false);
 	assert.equal(s.tty.listenerCount('readable'), 1);

@@ -1,5 +1,5 @@
 import React, {useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode} from 'react';
-import {Box, Text, measureElement, useApp, useInput, useStdin, useStdout, type DOMElement} from 'ink';
+import {Box, Text, measureElement, useApp, useInput, useStdout, type DOMElement} from 'ink';
 import {useTerminalSize} from './kit/terminal-size.js';
 import {COLUMN_BREAKPOINTS} from './kit/layout.js';
 import Prompt from './components/Prompt.js';
@@ -48,7 +48,7 @@ import type {ViewCommandHost, ViewCommandInfo} from './view/view-commands.js';
 import {ViewLayoutContext} from './view/use-view-host.js';
 import {copyToClipboard} from './view/clipboard.js';
 import {actionAt, cleanActions} from './transcript/actions.js';
-import {suspendTerminal} from './view/suspend.js';
+import {runSuspended} from './view/suspend.js';
 import {frameMetrics} from './kit/frame-metrics.js';
 import {DEFAULT_PREFS, getPrefs, setPrefs, subscribePrefs} from './view/prefs.js';
 import {areaAt, inside, toLocal, wheelDelta, type Rect} from './mouse/hit.js';
@@ -168,6 +168,7 @@ export default function App({
 	registry,
 	log = noopLog,
 	mouse,
+	input,
 	graceMs = AUTO_PANEL_GRACE_MS,
 	alerts,
 	events,
@@ -175,13 +176,13 @@ export default function App({
 	registry: Registry;
 	log?: Logger;
 	mouse?: AppMouse;
+	input?: {holdRawModeErrors(): () => unknown};
 	graceMs?: number;
 	alerts?: unknown;
 	events?: EventBus;
 }) {
-	const {exit} = useApp();
+	const {exit, suspendTerminal} = useApp();
 	const {stdout} = useStdout();
-	const {stdin} = useStdin();
 	const [, setPrefsTick] = useState(0);
 	useEffect(() => subscribePrefs(() => setPrefsTick(n => n + 1)), []);
 	const mouseWanted = getPrefs().mouse;
@@ -736,7 +737,7 @@ export default function App({
 			clear: clearAll,
 			exit,
 			copyToClipboard: text => copyToClipboard(stdout, text),
-			suspend: fn => suspendTerminal(stdin as never, stdout as never, fn, mouse),
+			suspend: fn => runSuspended(suspendTerminal, fn, {mouse, input}),
 			mount: mount(
 				text => out(text),
 				() => {

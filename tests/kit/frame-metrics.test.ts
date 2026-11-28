@@ -14,7 +14,6 @@ import {copyToClipboard} from '../../src/view/clipboard.js';
 import {createMouseTerminal} from '../../src/mouse/terminal.js';
 import {createInputProxy} from '../../src/mouse/input.js';
 import {createFakeTty} from '../testkit.js';
-import {suspendTerminal} from '../../src/view/suspend.js';
 
 type Rec = {msg: string; fields: Record<string, unknown> | undefined};
 
@@ -433,14 +432,6 @@ describe('raw write sites', () => {
 		assert.equal(await rawWritesAfter(() => createMouseTerminal(tty(), proxy).setWanted(true)), 1);
 	});
 
-	test('suspend leave and return', async () => {
-		const stdin = Object.assign(new PassThrough(), {setRawMode: () => {}, isRaw: false});
-		const stdout = Object.assign(new PassThrough(), {isTTY: true});
-		const n = await rawWritesAfter(async () => {
-			await suspendTerminal(stdin as never, stdout as never, async () => {});
-		});
-		assert.equal(n, 2);
-	});
 });
 
 describe('input sites', () => {

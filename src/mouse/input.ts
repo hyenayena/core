@@ -33,6 +33,7 @@ export type InputProxy = {
 	stream: ProxyStream;
 	onMouse(listener: (e: MouseInputEvent) => void): () => void;
 	setEnabled(on: boolean): void;
+	holdRawModeErrors(): () => unknown;
 };
 
 // A lone ESC or a split report released too early reaches the chat as an Esc key press and interrupts
@@ -59,6 +60,8 @@ export function createInputProxy(
 	let attached = false;
 	let timer: TimerHandle | undefined;
 	let deferred: TimerHandle | undefined;
+	let holding = false;
+	let heldError: {error: unknown} | undefined;
 
 	const readable = new Readable({read() {}, encoding: 'utf8'});
 	const stream = readable as ProxyStream;
@@ -154,7 +157,12 @@ export function createInputProxy(
 	Object.defineProperty(stream, 'isTTY', {value: true});
 	Object.defineProperty(stream, 'isRaw', {get: () => source.isRaw === true});
 	stream.setRawMode = (mode: boolean) => {
-		source.setRawMode?.(mode);
+		try {
+			source.setRawMode?.(mode);
+		} catch (error) {
+			if (!holding) throw error;
+			heldError ??= {error};
+		}
 		return stream;
 	};
 	stream.ref = () => {
@@ -183,6 +191,15 @@ export function createInputProxy(
 		setEnabled(on) {
 			enabled = on;
 			tokenizer.setX10(on);
+		},
+		holdRawModeErrors() {
+			holding = true;
+			return () => {
+				holding = false;
+				const held = heldError;
+				heldError = undefined;
+				return held?.error;
+			};
 		},
 	};
 }

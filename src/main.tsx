@@ -17,7 +17,7 @@ const main: ModuleMain = yena => {
 	const proxy = process.stdin.isTTY ? createInputProxy(process.stdin) : undefined;
 	const mouse = proxy ? createMouseTerminal(process.stdout, proxy) : undefined;
 	if (mouse) process.once('exit', () => mouse.shutdown());
-	render(<App registry={registry} log={yena.log} mouse={mouse} alerts={yena.alerts} events={yena.events} />, {
+	render(<App registry={registry} log={yena.log} mouse={mouse} input={proxy} alerts={yena.alerts} events={yena.events} />, {
 		...(proxy ? {stdin: proxy.stream as unknown as NodeJS.ReadStream} : {}),
 		exitOnCtrlC: false,
 		onRender: ({renderTime}: {renderTime: number}) => frameMetrics().render(renderTime),

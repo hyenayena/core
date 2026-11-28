@@ -1,65 +1,46 @@
-import {countRawWrite} from '../kit/frame-metrics.js';
+type Mouse = {pause(): void; resume(): void};
+type Input = {holdRawModeErrors(): () => unknown};
 
-const ESC = String.fromCharCode(27);
-const LEAVE = `${ESC}[?1049l${ESC}[?25h${ESC}[?2004l`;
-const RETURN = `${ESC}[?1049h${ESC}[2J${ESC}[H${ESC}[?25l${ESC}[?2004h`;
-
-type In = {
-	listeners(event: 'readable'): Array<(...args: unknown[]) => void>;
-	removeListener(event: 'readable', fn: (...args: unknown[]) => void): unknown;
-	on(event: 'readable', fn: (...args: unknown[]) => void): unknown;
-	setRawMode?: (mode: boolean) => unknown;
-	isRaw?: boolean;
-};
-type Out = {write(s: string): unknown; emit(event: 'resize'): unknown};
-
-export async function suspendTerminal<T>(
-	stdin: In,
-	stdout: Out,
+export async function runSuspended<T>(
+	inkSuspend: (callback: () => Promise<void>) => Promise<void>,
 	fn: () => T | Promise<T>,
-	mouse?: {pause(): void; resume(): void},
+	deps: {mouse?: Mouse; input?: Input} = {},
 ): Promise<T> {
-	const readers = stdin.listeners('readable');
-	for (const r of readers) stdin.removeListener('readable', r);
-	const wasRaw = stdin.isRaw === true;
+	const {mouse, input} = deps;
+	let outcome: {ok: true; value: T} | {ok: false; error: unknown} | undefined;
+	let paused = false;
+	let release: (() => unknown) | undefined;
+	let inkFailure: {error: unknown} | undefined;
 	try {
-		stdin.setRawMode?.(false);
-	} catch (error) {
-		for (const r of readers) stdin.on('readable', r);
-		throw error;
-	}
-	// Every restore step runs even when one fails (setRawMode can throw EIO once the tty is gone);
-	// the first failure is rethrown afterwards, unless the child already failed.
-	const restore = (): {error: unknown} | undefined => {
-		let failure: {error: unknown} | undefined;
-		const step = (run: () => unknown) => {
+		await inkSuspend(async () => {
 			try {
-				run();
+				mouse?.pause();
+				paused = mouse !== undefined;
+				outcome = {ok: true, value: await fn()};
 			} catch (error) {
-				failure ??= {error};
+				outcome = {ok: false, error};
 			}
-		};
-		step(() => stdin.setRawMode?.(wasRaw));
-		for (const r of readers) stdin.on('readable', r);
-		step(() => {
-			stdout.write(RETURN);
-			countRawWrite();
+			// Last statement: Ink restores raw mode right after the callback returns.
+			release = input?.holdRawModeErrors();
 		});
-		step(() => mouse?.resume());
-		step(() => stdout.emit('resize'));
-		return failure;
-	};
-	let result: T;
-	try {
-		mouse?.pause();
-		stdout.write(LEAVE);
-		countRawWrite();
-		result = await fn();
 	} catch (error) {
-		restore();
-		throw error;
+		inkFailure = {error};
 	}
-	const failure = restore();
-	if (failure) throw failure.error;
-	return result;
+	// Every restore step runs even when one fails; the first failure is rethrown, the child's own wins.
+	const held = release?.();
+	let resumeFailure: {error: unknown} | undefined;
+	if (paused) {
+		try {
+			mouse?.resume();
+		} catch (error) {
+			resumeFailure = {error};
+		}
+	}
+	if (outcome === undefined) throw (inkFailure ?? {error: new Error('Terminal suspend did not run')}).error;
+	const done = outcome as {ok: true; value: T} | {ok: false; error: unknown};
+	if (!done.ok) throw done.error;
+	if (inkFailure) throw inkFailure.error;
+	if (held !== undefined) throw held;
+	if (resumeFailure) throw resumeFailure.error;
+	return done.value;
 }
